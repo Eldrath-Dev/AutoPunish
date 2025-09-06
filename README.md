@@ -51,4 +51,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 Support
 If you encounter any issues or have suggestions, please create an issue on GitHub.
 
-Made with ❤️ by AlanDev
+Made with ❤️ by AlanDev 
