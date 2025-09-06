@@ -1,5 +1,8 @@
 package com.alan.autoPunish;
 
+import com.alan.autoPunish.commands.PunishCommand;
+import com.alan.autoPunish.commands.PunishReloadCommand;
+import com.alan.autoPunish.commands.PunishmentsCommand;
 import com.alan.autoPunish.managers.ConfigManager;
 import com.alan.autoPunish.managers.DatabaseManager;
 import com.alan.autoPunish.managers.PunishmentManager;
@@ -30,9 +33,21 @@ public class AutoPunish extends JavaPlugin {
         this.webhookManager = new WebhookManager(this, configManager);
         this.punishmentManager = new PunishmentManager(this, configManager, databaseManager, webhookManager);
 
-        // Register commands (we'll implement these in the next step)
+        // Register commands
+        registerCommands();
 
         logger.info("AutoPunish plugin has been enabled!");
+    }
+
+    private void registerCommands() {
+        // Register command executors
+        getCommand("punish").setExecutor(new PunishCommand(this));
+        getCommand("punishments").setExecutor(new PunishmentsCommand(this));
+        getCommand("punishreload").setExecutor(new PunishReloadCommand(this));
+
+        // Register tab completers
+        getCommand("punish").setTabCompleter(new PunishCommand(this));
+        getCommand("punishments").setTabCompleter(new PunishmentsCommand(this));
     }
 
     @Override
