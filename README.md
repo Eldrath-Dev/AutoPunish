@@ -1,6 +1,4 @@
-AutoPunish
-Version
-API
+
 
 AutoPunish is a powerful Minecraft punishment management system that automatically handles player infractions with a configurable escalation system. This plugin allows server administrators to enforce rules consistently while maintaining detailed logs of all player violations.
 
