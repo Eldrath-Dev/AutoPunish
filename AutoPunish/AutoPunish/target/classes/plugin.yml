@@ -1,0 +1,34 @@
+name: AutoPunish
+version: '1.0.0'
+main: com.alan.autoPunish.AutoPunish
+api-version: '1.21'
+authors: [AlanDev]
+description: Automatic punishment escalation system for Minecraft servers
+
+commands:
+  punish:
+    description: Punish a player based on rule violation
+    usage: /punish <player> <rule>
+    permission: autopunish.punish
+  punishments:
+    description: View punishment history for a player
+    usage: /punishments <player>
+    permission: autopunish.punishments
+  punishreload:
+    description: Reload the AutoPunish configuration
+    usage: /punishreload
+    permission: autopunish.reload
+
+permissions:
+  autopunish.punish:
+    description: Allows using the punish command
+    default: op
+  autopunish.punishments:
+    description: Allows viewing punishment history
+    default: op
+  autopunish.reload:
+    description: Allows reloading the configuration
+    default: op
+  autopunish.muted:
+    description: Flag for muted players
+    default: false
