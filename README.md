@@ -1,4 +1,6 @@
-
+AutoPunish
+Version: 1.0.0
+API Version: 1.21
 
 AutoPunish is a powerful Minecraft punishment management system that automatically handles player infractions with a configurable escalation system. This plugin allows server administrators to enforce rules consistently while maintaining detailed logs of all player violations.
 
@@ -16,63 +18,8 @@ Place the JAR file in your server's plugins folder
 Start or restart your server
 Configure the config.yml file to your preferences
 Use /punishreload to apply changes without restarting
-Configuration
-The plugin uses a configuration file (config.yml) which is created on first run. Here's an explanation of the key settings:
 
-YAML
 
-discord-webhook: "https://discord.com/api/webhooks/your-webhook-url"
-
-storage:
-  type: "sqlite"  # or "mysql"
-  mysql:
-    host: "localhost"
-    port: 3306
-    database: "punishments"
-    username: "root"
-    password: "password"
-
-rules:
-  rule_name:
-    - type: "warn"  # Type of punishment
-      duration: "0"  # Duration (0 for permanent or no duration)
-    - type: "mute"
-      duration: "1h"  # Format: number + unit (m/h/d/w)
-    # Additional tiers...
-Duration Format
-Durations use a simple format:
-
-0 - Permanent/no duration
-[number]m - Minutes (e.g., 10m = 10 minutes)
-[number]h - Hours (e.g., 2h = 2 hours)
-[number]d - Days (e.g., 3d = 3 days)
-[number]w - Weeks (e.g., 1w = 1 week)
-Default Rules
-The plugin comes with several pre-configured rules:
-
-minor_chat_violations
-spam
-impersonation
-advertising
-hacking
-griefing
-harassment
-Each rule has its own escalation path defined in the configuration.
-
-Commands
-Command	Description	Permission
-/punish <player> <rule>	Punish a player for breaking a rule	autopunish.punish
-/punishments <player>	View a player's punishment history	autopunish.punishments
-/punishreload	Reload the plugin configuration	autopunish.reload
-Permissions
-Permission	Description	Default
-autopunish.punish	Allows using the punish command	op
-autopunish.punishments	Allows viewing punishment history	op
-autopunish.reload	Allows reloading the configuration	op
-autopunish.muted	Flag for muted players (do not assign manually)	false
-Dependencies
-Required: Paper/Spigot 1.20+
-Recommended: LuckPerms (for mute functionality)
 Examples
 Example Punishment Escalation
 A player who violates the "spam" rule repeatedly might face:
@@ -83,15 +30,8 @@ Third offense: 30-minute mute
 Fourth offense: 2-hour mute
 Fifth offense: 1-day mute
 Subsequent offenses: 1-day mute (repeating)
-Discord Notification Format
-text
 
-**Punishment Issued**
-Player: PlayerName
-Rule: spam
-Punishment: Mute (10m)
-Staff: AdminName
-Date: 2023-09-06 15:30:45
+
 Database Schema
 The plugin stores punishment data in a table with the following structure:
 
