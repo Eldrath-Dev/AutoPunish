@@ -79,9 +79,9 @@ public class PunishmentManager {
         logger.info("Selected punishment: Type=" + type + ", Duration=" + duration +
                 " (Based on rule tier: " + ruleTier + ", severity tier: " + severityTier + ")");
 
-        // Check if this punishment needs admin approval
+        // Check if this punishment needs admin approval - Updated to include sender
         PunishmentQueueManager queueManager = plugin.getPunishmentQueueManager();
-        if (queueManager != null && queueManager.needsApproval(type, duration)) {
+        if (queueManager != null && queueManager.needsApproval(type, duration, sender)) {
             // Queue the punishment instead of applying it immediately
             queueManager.queuePunishment(target, ruleName, type, duration, sender, severityScore);
             return true;

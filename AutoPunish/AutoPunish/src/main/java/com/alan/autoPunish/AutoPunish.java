@@ -8,6 +8,7 @@ import com.alan.autoPunish.managers.DatabaseManager;
 import com.alan.autoPunish.managers.PunishmentManager;
 import com.alan.autoPunish.managers.PunishmentQueueManager;
 import com.alan.autoPunish.managers.WebhookManager;
+import com.alan.autoPunish.utils.ConfigUtils;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.configuration.file.FileConfiguration;
 import java.util.logging.Logger;
@@ -28,6 +29,13 @@ public class AutoPunish extends JavaPlugin {
         // Set instance and logger
         instance = this;
         this.logger = getLogger();
+
+        // Load default config
+        saveDefaultConfig();
+
+        // Initialize ConfigUtils
+        ConfigUtils.init(this);
+        logger.info("Config utilities initialized successfully!");
 
         // Initialize managers
         this.configManager = new ConfigManager(this);

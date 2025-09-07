@@ -1,8 +1,8 @@
 package com.alan.autoPunish.managers;
 
 import com.alan.autoPunish.AutoPunish;
-import com.alan.autoPunish.models.Punishment;
 import com.alan.autoPunish.models.QueuedPunishment;
+import com.alan.autoPunish.utils.ConfigUtils;
 import com.alan.autoPunish.utils.TimeUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -24,10 +24,102 @@ public class PunishmentQueueManager {
     }
 
     /**
+     * Check if a punishment needs admin approval based on severity and staff permissions
+     */
+    public boolean needsApproval(String type, String duration, CommandSender sender) {
+        // Skip if approval system is disabled
+        if (!ConfigUtils.isApprovalSystemEnabled()) {
+            return false;
+        }
+
+        // Check if staff member can bypass approval
+        if (canBypassApproval(sender)) {
+            logger.info("Staff member " + sender.getName() + " bypassed punishment approval due to permissions");
+            return false;
+        }
+
+        // Check for severe punishments (ban > configured days or permanent)
+        if (type.equalsIgnoreCase("ban")) {
+            // If permanent ban
+            if (duration.equals("0")) {
+                return true;
+            }
+
+            // If ban duration > configured days
+            long durationMillis = TimeUtil.parseDuration(duration);
+            int approvalAfterDays = ConfigUtils.getRequireApprovalAfterDays();
+            if (durationMillis > approvalAfterDays * 24 * 60 * 60 * 1000L) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if a staff member can bypass punishment approval
+     */
+    public boolean canBypassApproval(CommandSender sender) {
+        if (!(sender instanceof Player)) {
+            // Console can always bypass
+            return true;
+        }
+
+        // Check if the player has any of the bypass permissions
+        for (String permission : ConfigUtils.getBypassApprovalPermissions()) {
+            if (sender.hasPermission(permission)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Process a punishment that bypasses approval (auto-approved by staff rank)
+     */
+    public boolean processAutoApproved(OfflinePlayer target, String rule, String type, String duration,
+                                       CommandSender sender, int severityScore) {
+        String staffName = sender.getName();
+        UUID staffUuid = sender instanceof Player ? ((Player) sender).getUniqueId() : new UUID(0, 0);
+
+        boolean success = plugin.getPunishmentManager().executeApprovedPunishment(
+                target,
+                rule,
+                type,
+                duration,
+                staffName,
+                staffUuid,
+                staffName + " (Auto-approved by rank)"
+        );
+
+        if (success) {
+            sender.sendMessage("§aYour punishment was auto-approved due to your staff rank.");
+
+            // Notify admins if configured
+            if (ConfigUtils.shouldNotifyAdminOnAutoApproved()) {
+                notifyAdmins("§6[AutoPunish] §e" + staffName + " issued a " + type +
+                        " (" + (duration.equals("0") ? "Permanent" : duration) + ") to " +
+                        target.getName() + " (auto-approved by rank)");
+            }
+
+            logger.info("Auto-approved punishment executed: " + type + " " + duration +
+                    " for player " + target.getName() + " by " + staffName);
+        }
+
+        return success;
+    }
+
+    /**
      * Queue a punishment for admin approval
      */
     public void queuePunishment(OfflinePlayer target, String rule, String type, String duration,
                                 CommandSender sender, int severityScore) {
+        // Check if staff member can bypass approval
+        if (canBypassApproval(sender)) {
+            processAutoApproved(target, rule, type, duration, sender, severityScore);
+            return;
+        }
+
         String staffName = sender instanceof Player ? sender.getName() : "Console";
         UUID staffUuid = sender instanceof Player ? ((Player) sender).getUniqueId() : new UUID(0, 0);
 
@@ -115,26 +207,6 @@ public class PunishmentQueueManager {
     }
 
     /**
-     * Check if a punishment needs admin approval based on severity
-     */
-    public boolean needsApproval(String type, String duration) {
-        // Check for severe punishments (ban > 7 days)
-        if (type.equalsIgnoreCase("ban")) {
-            // If permanent ban
-            if (duration.equals("0")) {
-                return true;
-            }
-
-            // If ban duration > 7 days
-            long durationMillis = TimeUtil.parseDuration(duration);
-            if (durationMillis > 7 * 24 * 60 * 60 * 1000L) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
      * Get all queued punishments
      */
     public List<QueuedPunishment> getQueuedPunishments() {
@@ -153,7 +225,7 @@ public class PunishmentQueueManager {
      */
     private void notifyAdmins(String message) {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (player.hasPermission("autopunish.admin")) {
+            if (player.hasPermission("autopunish.admin.approve")) {
                 player.sendMessage(message);
             }
         }
