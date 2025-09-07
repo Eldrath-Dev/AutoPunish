@@ -3,6 +3,7 @@ package com.alan.autoPunish;
 import com.alan.autoPunish.commands.PunishCommand;
 import com.alan.autoPunish.commands.PunishReloadCommand;
 import com.alan.autoPunish.commands.PunishmentsCommand;
+import com.alan.autoPunish.commands.SeverityCommand;
 import com.alan.autoPunish.listeners.ChatListener;
 import com.alan.autoPunish.managers.ConfigManager;
 import com.alan.autoPunish.managers.DatabaseManager;
@@ -48,10 +49,12 @@ public class AutoPunish extends JavaPlugin {
         getCommand("punish").setExecutor(new PunishCommand(this));
         getCommand("punishments").setExecutor(new PunishmentsCommand(this));
         getCommand("punishreload").setExecutor(new PunishReloadCommand(this));
+        getCommand("severity").setExecutor(new SeverityCommand(this));
 
         // Register tab completers
         getCommand("punish").setTabCompleter(new PunishCommand(this));
         getCommand("punishments").setTabCompleter(new PunishmentsCommand(this));
+        getCommand("severity").setTabCompleter(new SeverityCommand(this));
     }
 
     private void registerListeners() {

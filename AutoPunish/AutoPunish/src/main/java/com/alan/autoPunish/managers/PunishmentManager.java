@@ -130,7 +130,7 @@ public class PunishmentManager {
      * Calculate a severity score based on all previous punishments
      * This helps determine escalation across different rule types
      */
-    private int calculateSeverityScore(List<Punishment> punishments) {
+    public int calculateSeverityScore(List<Punishment> punishments) {
         int score = 0;
         long now = System.currentTimeMillis();
 
@@ -172,7 +172,7 @@ public class PunishmentManager {
     /**
      * Determine global tier based on overall severity score
      */
-    private int determineGlobalTier(int severityScore) {
+    public int determineGlobalTier(int severityScore) {
         // Simple mapping of severity score to tier
         if (severityScore <= 2) return 1;
         if (severityScore <= 5) return 2;
