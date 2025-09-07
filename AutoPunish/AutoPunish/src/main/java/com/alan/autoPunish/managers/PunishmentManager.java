@@ -91,9 +91,9 @@ public class PunishmentManager {
                 sender.sendMessage("§eWarning: Punishment applied but failed to save to database.");
             }
 
-            // Send webhook notification
+            // Send webhook notification with enhanced information
             try {
-                webhookManager.sendPunishmentWebhook(punishmentRecord);
+                webhookManager.sendPunishmentWebhook(punishmentRecord, tier, previousPunishments);
                 logger.info("Punishment webhook notification sent successfully");
             } catch (Exception e) {
                 logger.log(Level.WARNING, "Failed to send webhook notification", e);
@@ -103,7 +103,7 @@ public class PunishmentManager {
             // Notify the staff member
             sender.sendMessage("§aSuccessfully punished " + target.getName() + " for " + ruleName +
                     " (Punishment: " + type + ", Duration: " +
-                    (duration.equals("0") ? "Permanent" : duration) + ")");
+                    (duration.equals("0") ? "Permanent" : duration) + ", Offense #" + tier + ")");
         } else {
             sender.sendMessage("§cFailed to apply punishment to " + target.getName());
         }
