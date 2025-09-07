@@ -216,20 +216,13 @@ public class WebPanelManager {
         String adminName = ctx.queryParam("adminName");
         if (adminName == null) adminName = "WebAdmin";
 
-        final String finalAdminName = adminName;
-
-        // Run the approval on the main server thread and wait for completion
         try {
-            // Create a fake CommandSender for the approval
+            // Process the approval directly
             ConsoleCommandSender consoleSender = Bukkit.getConsoleSender();
-
-            // Run synchronously and wait for result
-            boolean success = Bukkit.getScheduler().callSyncMethod(plugin, () ->
-                    plugin.getPunishmentQueueManager().processApproval(approvalId, true, consoleSender)
-            ).get();
+            boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, true, consoleSender);
 
             if (success) {
-                logger.info("Web panel: Punishment " + approvalId + " approved successfully by " + finalAdminName);
+                logger.info("Web panel: Punishment " + approvalId + " approved successfully by " + adminName);
                 ctx.json(Map.of("success", true, "message", "Punishment approved successfully"));
             } else {
                 logger.warning("Web panel: Failed to approve punishment " + approvalId);
@@ -248,20 +241,13 @@ public class WebPanelManager {
         String adminName = ctx.queryParam("adminName");
         if (adminName == null) adminName = "WebAdmin";
 
-        final String finalAdminName = adminName;
-
-        // Run the denial on the main server thread and wait for completion
         try {
-            // Create a fake CommandSender for the denial
+            // Process the denial directly
             ConsoleCommandSender consoleSender = Bukkit.getConsoleSender();
-
-            // Run synchronously and wait for result
-            boolean success = Bukkit.getScheduler().callSyncMethod(plugin, () ->
-                    plugin.getPunishmentQueueManager().processApproval(approvalId, false, consoleSender)
-            ).get();
+            boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, false, consoleSender);
 
             if (success) {
-                logger.info("Web panel: Punishment " + approvalId + " denied successfully by " + finalAdminName);
+                logger.info("Web panel: Punishment " + approvalId + " denied successfully by " + adminName);
                 ctx.json(Map.of("success", true, "message", "Punishment denied successfully"));
             } else {
                 logger.warning("Web panel: Failed to deny punishment " + approvalId);

@@ -29,6 +29,11 @@ commands:
     usage: "§c/punishadmin <list|approve|deny> [approvalId]"
     permission: autopunish.admin.approve
     aliases: [padmin]
+  resethistory:
+    description: Reset a player's violation history
+    usage: "§c/resethistory <player>"
+    permission: autopunish.admin.reset
+    aliases: [resetviolations]
 
 permissions:
   # Basic permissions
@@ -57,12 +62,16 @@ permissions:
   autopunish.admin.approve:
     description: Allows approving or denying punishments
     default: op
+  autopunish.admin.reset:
+    description: Allows resetting player violation history
+    default: op
   autopunish.admin.senior:
     description: Senior admin permission that includes bypassing approvals
     default: false
     children:
       autopunish.admin.approve: true
       autopunish.admin.reload: true
+      autopunish.admin.reset: true
       autopunish.bypass.approval: true
   autopunish.admin.*:
     description: Grants all admin permissions
@@ -70,6 +79,7 @@ permissions:
     children:
       autopunish.admin.reload: true
       autopunish.admin.approve: true
+      autopunish.admin.reset: true
 
   # Bypass permissions
   autopunish.bypass.approval:
