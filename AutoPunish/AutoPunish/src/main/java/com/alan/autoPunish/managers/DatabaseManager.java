@@ -32,7 +32,7 @@ public class DatabaseManager {
             if (storageType.equalsIgnoreCase("mysql")) {
                 setupMysql();
             } else {
-                setupSqlite();
+                setupSqlite(); // This now actually sets up H2 but we keep the method name
             }
 
             createTables();
@@ -45,12 +45,12 @@ public class DatabaseManager {
 
     private void setupSqlite() throws SQLException {
         try {
-            Class.forName("org.sqlite.JDBC");
-            logger.info("SQLite JDBC driver loaded successfully!");
+            Class.forName("org.h2.Driver");
+            logger.info("H2 database driver loaded successfully!");
         } catch (ClassNotFoundException e) {
-            logger.log(Level.SEVERE, "SQLite JDBC driver not found", e);
+            logger.log(Level.SEVERE, "H2 database driver not found", e);
             e.printStackTrace();
-            throw new SQLException("SQLite JDBC driver not found");
+            throw new SQLException("H2 database driver not found");
         }
 
         File dataFolder = plugin.getDataFolder();
@@ -62,9 +62,9 @@ public class DatabaseManager {
             }
         }
 
-        File dbFile = new File(dataFolder, "punishments.db");
-        String url = "jdbc:sqlite:" + dbFile.getAbsolutePath();
-        logger.info("Connecting to SQLite database at: " + dbFile.getAbsolutePath());
+        File dbFile = new File(dataFolder, "punishments");
+        String url = "jdbc:h2:" + dbFile.getAbsolutePath() + ";MODE=MySQL";
+        logger.info("Connecting to H2 database at: " + dbFile.getAbsolutePath());
 
         try {
             connection = DriverManager.getConnection(url);
@@ -74,11 +74,10 @@ public class DatabaseManager {
                 stmt.execute("SELECT 1");
             }
 
-            logger.info("SQLite connection established successfully!");
+            logger.info("H2 connection established successfully!");
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "Failed to connect to SQLite database: " + e.getMessage(), e);
+            logger.log(Level.SEVERE, "Failed to connect to H2 database: " + e.getMessage(), e);
             logger.log(Level.SEVERE, "Database file location: " + dbFile.getAbsolutePath());
-            logger.log(Level.SEVERE, "Is file writable: " + dbFile.canWrite());
             logger.log(Level.SEVERE, "Is parent directory writable: " + dataFolder.canWrite());
             e.printStackTrace();
             throw e;
