@@ -9,6 +9,18 @@ storage:
     username: "root"
     password: "password"
 
+# Approval system settings
+approval-system:
+  enabled: true
+  # Minimum ban duration that requires approval (in days)
+  require-approval-after: 7
+  # Staff ranks that can bypass approval
+  bypass-approval-permissions:
+    - "autopunish.bypass.approval"
+    - "autopunish.admin.senior"
+  # Notification settings
+  notify-admin-on-auto-approved: true
+
 rules:
   minor_chat_violations:
     - type: "warn"
