@@ -104,7 +104,10 @@ public class PunishmentQueueManager {
         );
 
         if (success) {
-            sender.sendMessage("§aYour punishment was auto-approved due to your staff rank.");
+            // Only send message if sender is a player
+            if (sender instanceof Player) {
+                sender.sendMessage("§aYour punishment was auto-approved due to your staff rank.");
+            }
 
             // Notify admins if configured
             if (ConfigUtils.shouldNotifyAdminOnAutoApproved()) {
@@ -158,9 +161,11 @@ public class PunishmentQueueManager {
             logger.log(Level.WARNING, "Failed to send webhook for queued punishment", e);
         }
 
-        // Notify staff member
-        sender.sendMessage("§eSevere punishment has been queued for admin approval. Approval ID: §f" +
-                queuedPunishment.getApprovalId());
+        // Only send message if sender is a player
+        if (sender instanceof Player) {
+            sender.sendMessage("§eSevere punishment has been queued for admin approval. Approval ID: §f" +
+                    queuedPunishment.getApprovalId());
+        }
 
         // Notify all online admins
         notifyAdmins("§6[AutoPunish] §eNew punishment queued for approval: §f" +
@@ -174,15 +179,24 @@ public class PunishmentQueueManager {
      * Process an approval response
      */
     public boolean processApproval(String approvalId, boolean approved, CommandSender admin) {
+        logger.info("Processing approval for ID: " + approvalId + ", approved: " + approved + ", admin: " + admin.getName());
+
         QueuedPunishment queued = queuedPunishments.get(approvalId);
         if (queued == null) {
-            admin.sendMessage("§cNo pending punishment found with ID: " + approvalId);
+            logger.warning("No pending punishment found with ID: " + approvalId);
+            // Only send message if admin is a player (not console/web)
+            if (admin instanceof Player) {
+                admin.sendMessage("§cNo pending punishment found with ID: " + approvalId);
+            }
             return false;
         }
+
+        logger.info("Found queued punishment for player: " + queued.getPlayerName() + ", rule: " + queued.getRule());
 
         PunishmentManager punishmentManager = plugin.getPunishmentManager();
 
         if (approved) {
+            logger.info("Executing approved punishment for player: " + queued.getPlayerName());
             // Execute the punishment
             OfflinePlayer target = Bukkit.getOfflinePlayer(queued.getPlayerUuid());
             boolean success = punishmentManager.executeApprovedPunishment(
@@ -196,19 +210,28 @@ public class PunishmentQueueManager {
             );
 
             if (success) {
-                admin.sendMessage("§aPunishment approved and executed successfully.");
+                logger.info("Approved punishment executed successfully for: " + queued.getPlayerName());
+                // Only send message if admin is a player (not console/web)
+                if (admin instanceof Player) {
+                    admin.sendMessage("§aPunishment approved and executed successfully.");
+                }
                 logger.info("Approved punishment executed: " + approvalId);
 
                 // Notify all admins
                 notifyAdmins("§6[AutoPunish] §aPunishment for §f" + queued.getPlayerName() +
                         " §aapproved by §f" + admin.getName());
             } else {
-                admin.sendMessage("§cFailed to execute approved punishment.");
+                logger.warning("Failed to execute approved punishment for: " + queued.getPlayerName());
+                // Only send message if admin is a player (not console/web)
+                if (admin instanceof Player) {
+                    admin.sendMessage("§cFailed to execute approved punishment.");
+                }
                 logger.warning("Failed to execute approved punishment: " + approvalId);
                 return false;
             }
         } else {
-            // Notify staff that punishment was denied
+            logger.info("Denying punishment for player: " + queued.getPlayerName());
+            // Notify staff that punishment was denied (only if staff member is online)
             Player staffMember = Bukkit.getPlayer(queued.getStaffUuid());
             if (staffMember != null) {
                 staffMember.sendMessage("§cYour punishment request for " + queued.getPlayerName() +
@@ -219,13 +242,17 @@ public class PunishmentQueueManager {
             notifyAdmins("§6[AutoPunish] §cPunishment for §f" + queued.getPlayerName() +
                     " §cdenied by §f" + admin.getName());
 
-            admin.sendMessage("§cPunishment denied successfully.");
+            // Only send message if admin is a player (not console/web)
+            if (admin instanceof Player) {
+                admin.sendMessage("§cPunishment denied successfully.");
+            }
             logger.info("Punishment denied by admin " + admin.getName() + ": " + approvalId);
         }
 
         // Remove from queue
         queuedPunishments.remove(approvalId);
         plugin.getDatabaseManager().removeQueuedPunishment(approvalId);
+        logger.info("Removed queued punishment with ID: " + approvalId);
         return true;
     }
 

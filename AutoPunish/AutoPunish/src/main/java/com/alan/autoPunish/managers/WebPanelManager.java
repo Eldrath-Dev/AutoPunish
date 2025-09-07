@@ -216,10 +216,14 @@ public class WebPanelManager {
         String adminName = ctx.queryParam("adminName");
         if (adminName == null) adminName = "WebAdmin";
 
+        logger.info("Web panel approve request received for ID: " + approvalId + " by admin: " + adminName);
+
         try {
             // Process the approval directly
             ConsoleCommandSender consoleSender = Bukkit.getConsoleSender();
             boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, true, consoleSender);
+
+            logger.info("PunishmentQueueManager returned success: " + success);
 
             if (success) {
                 logger.info("Web panel: Punishment " + approvalId + " approved successfully by " + adminName);
@@ -241,10 +245,14 @@ public class WebPanelManager {
         String adminName = ctx.queryParam("adminName");
         if (adminName == null) adminName = "WebAdmin";
 
+        logger.info("Web panel deny request received for ID: " + approvalId + " by admin: " + adminName);
+
         try {
             // Process the denial directly
             ConsoleCommandSender consoleSender = Bukkit.getConsoleSender();
             boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, false, consoleSender);
+
+            logger.info("PunishmentQueueManager returned success: " + success);
 
             if (success) {
                 logger.info("Web panel: Punishment " + approvalId + " denied successfully by " + adminName);
