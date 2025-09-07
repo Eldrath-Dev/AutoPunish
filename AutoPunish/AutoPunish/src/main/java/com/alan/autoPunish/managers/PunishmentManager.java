@@ -161,6 +161,17 @@ public class PunishmentManager {
      */
     public boolean executeApprovedPunishment(OfflinePlayer target, String rule, String type, String duration,
                                              String staffName, UUID staffUuid, String adminName) {
+        // Get previous punishments for this rule to determine the tier
+        List<Punishment> ruleSpecificPunishments =
+                databaseManager.getPunishmentHistoryForRule(target.getUniqueId(), rule);
+
+        // Get ALL previous punishments for severity score
+        List<Punishment> allPunishments = databaseManager.getPunishmentHistory(target.getUniqueId());
+
+        // Calculate tier and severity
+        int tier = ruleSpecificPunishments.size() + 1;
+        int severityScore = calculateSeverityScore(allPunishments);
+
         // Create punishment record
         Punishment punishmentRecord = new Punishment(
                 target.getUniqueId(),
@@ -188,9 +199,9 @@ public class PunishmentManager {
             // Fire the PunishmentAppliedEvent
             Bukkit.getPluginManager().callEvent(new PunishmentAppliedEvent(punishmentRecord));
 
-            // Send webhook notification
+            // Send webhook notification with tier and history
             try {
-                webhookManager.sendPunishmentWebhook(punishmentRecord, 0, null, null, 0);
+                webhookManager.sendPunishmentWebhook(punishmentRecord, tier, ruleSpecificPunishments, allPunishments, severityScore);
                 logger.info("Approved punishment webhook notification sent successfully");
             } catch (Exception e) {
                 logger.log(Level.WARNING, "Failed to send approved punishment webhook", e);

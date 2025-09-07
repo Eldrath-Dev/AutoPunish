@@ -41,6 +41,9 @@ public class AutoPunish extends JavaPlugin {
         this.punishmentQueueManager = new PunishmentQueueManager(this);
         this.punishmentManager = new PunishmentManager(this, configManager, databaseManager, webhookManager);
 
+        // Load queued punishments from database
+        this.punishmentQueueManager.loadQueuedPunishments();
+
         // Initialize API
         AutoPunishAPI.init(this);
         logger.info("AutoPunish API initialized successfully!");
@@ -68,12 +71,14 @@ public class AutoPunish extends JavaPlugin {
         getCommand("punishreload").setExecutor(new PunishReloadCommand(this));
         getCommand("severity").setExecutor(new SeverityCommand(this));
         getCommand("punishadmin").setExecutor(new PunishAdminCommand(this));
+        getCommand("resethistory").setExecutor(new ResetHistoryCommand(this));
 
         // Register tab completers
         getCommand("punish").setTabCompleter(new PunishCommand(this));
         getCommand("punishments").setTabCompleter(new PunishmentsCommand(this));
         getCommand("severity").setTabCompleter(new SeverityCommand(this));
         getCommand("punishadmin").setTabCompleter(new PunishAdminCommand(this));
+        getCommand("resethistory").setTabCompleter(new ResetHistoryCommand(this));
     }
 
     private void registerListeners() {

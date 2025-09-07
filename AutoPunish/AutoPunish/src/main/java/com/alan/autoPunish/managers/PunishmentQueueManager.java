@@ -24,6 +24,17 @@ public class PunishmentQueueManager {
     }
 
     /**
+     * Load queued punishments from the database on startup
+     */
+    public void loadQueuedPunishments() {
+        List<QueuedPunishment> loaded = plugin.getDatabaseManager().getQueuedPunishments();
+        for (QueuedPunishment punishment : loaded) {
+            queuedPunishments.put(punishment.getApprovalId(), punishment);
+        }
+        logger.info("Loaded " + loaded.size() + " queued punishments from database");
+    }
+
+    /**
      * Check if a punishment needs admin approval based on severity and staff permissions
      */
     public boolean needsApproval(String type, String duration, CommandSender sender) {
@@ -136,6 +147,9 @@ public class PunishmentQueueManager {
         // Store in our queue
         queuedPunishments.put(queuedPunishment.getApprovalId(), queuedPunishment);
 
+        // Save to database
+        plugin.getDatabaseManager().saveQueuedPunishment(queuedPunishment);
+
         // Send webhook notification about the queued punishment
         try {
             plugin.getWebhookManager().sendQueuedPunishmentWebhook(queuedPunishment, severityScore);
@@ -211,6 +225,7 @@ public class PunishmentQueueManager {
 
         // Remove from queue
         queuedPunishments.remove(approvalId);
+        plugin.getDatabaseManager().removeQueuedPunishment(approvalId);
         return true;
     }
 
@@ -226,6 +241,25 @@ public class PunishmentQueueManager {
      */
     public QueuedPunishment getQueuedPunishment(String approvalId) {
         return queuedPunishments.get(approvalId);
+    }
+
+    /**
+     * Reset a player's punishment history
+     */
+    public boolean resetPlayerHistory(UUID playerUuid) {
+        // Remove any queued punishments for this player
+        Iterator<Map.Entry<String, QueuedPunishment>> iterator = queuedPunishments.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<String, QueuedPunishment> entry = iterator.next();
+            if (entry.getValue().getPlayerUuid().equals(playerUuid)) {
+                iterator.remove();
+                // Also remove from database
+                plugin.getDatabaseManager().removeQueuedPunishment(entry.getValue().getApprovalId());
+            }
+        }
+
+        // Reset the player's history in the database
+        return plugin.getDatabaseManager().resetPlayerHistory(playerUuid);
     }
 
     /**

@@ -29,6 +29,21 @@ public class QueuedPunishment {
         this.approvalId = UUID.randomUUID().toString().substring(0, 8); // Generate a short approval ID
     }
 
+    // New constructor for loading from database
+    public QueuedPunishment(UUID id, UUID playerUuid, String playerName, String rule, String type, String duration,
+                            String staffName, UUID staffUuid, Date queuedDate, String approvalId) {
+        this.id = id;
+        this.playerUuid = playerUuid;
+        this.playerName = playerName;
+        this.rule = rule;
+        this.type = type;
+        this.duration = duration;
+        this.staffName = staffName;
+        this.staffUuid = staffUuid;
+        this.queuedDate = queuedDate;
+        this.approvalId = approvalId;
+    }
+
     // Getters
     public UUID getId() {
         return id;

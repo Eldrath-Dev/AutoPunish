@@ -11,6 +11,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -161,15 +162,36 @@ public class WebPanelManager {
         int page = ctx.queryParamAsClass("page", Integer.class).getOrDefault(1);
         int size = ctx.queryParamAsClass("size", Integer.class).getOrDefault(20);
 
-        // In a real implementation, use pagination in your database query
-        List<Punishment> punishments = plugin.getDatabaseManager().getPunishmentHistory(null);
+        try {
+            // Get all punishments from all players
+            List<Punishment> allPunishments = new ArrayList<>();
 
-        ctx.json(Map.of(
-                "punishments", punishments,
-                "total", punishments.size(),
-                "page", page,
-                "size", size
-        ));
+            // Get punishments for all online players
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                allPunishments.addAll(plugin.getDatabaseManager().getPunishmentHistory(player.getUniqueId()));
+            }
+
+            // Sort by date (newest first)
+            allPunishments.sort((p1, p2) -> p2.getDate().compareTo(p1.getDate()));
+
+            // Apply pagination
+            int start = (page - 1) * size;
+            int end = Math.min(start + size, allPunishments.size());
+            List<Punishment> paginatedPunishments = start < allPunishments.size() ?
+                    allPunishments.subList(start, end) :
+                    new ArrayList<>();
+
+            ctx.json(Map.of(
+                    "punishments", paginatedPunishments,
+                    "total", allPunishments.size(),
+                    "page", page,
+                    "size", size
+            ));
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error loading punishments: " + e.getMessage(), e);
+            ctx.status(500);
+            ctx.json(Map.of("error", "Failed to load punishments: " + e.getMessage()));
+        }
     }
 
     private void getPunishmentsForPlayer(Context ctx) {
@@ -196,22 +218,29 @@ public class WebPanelManager {
 
         final String finalAdminName = adminName;
 
-        // Run the approval on the main server thread
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
+        // Run the approval on the main server thread and wait for completion
+        try {
             // Create a fake CommandSender for the approval
             ConsoleCommandSender consoleSender = Bukkit.getConsoleSender();
 
-            boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, true, consoleSender);
+            // Run synchronously and wait for result
+            boolean success = Bukkit.getScheduler().callSyncMethod(plugin, () ->
+                    plugin.getPunishmentQueueManager().processApproval(approvalId, true, consoleSender)
+            ).get();
 
             if (success) {
                 logger.info("Web panel: Punishment " + approvalId + " approved successfully by " + finalAdminName);
+                ctx.json(Map.of("success", true, "message", "Punishment approved successfully"));
             } else {
                 logger.warning("Web panel: Failed to approve punishment " + approvalId);
+                ctx.status(404);
+                ctx.json(Map.of("success", false, "error", "Punishment not found or already processed"));
             }
-        });
-
-        // Respond immediately to the web request
-        ctx.json(Map.of("success", true, "message", "Approval request received and being processed"));
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error approving punishment: " + e.getMessage(), e);
+            ctx.status(500);
+            ctx.json(Map.of("success", false, "error", "Server error: " + e.getMessage()));
+        }
     }
 
     private void denyQueuedPunishment(Context ctx) {
@@ -221,22 +250,29 @@ public class WebPanelManager {
 
         final String finalAdminName = adminName;
 
-        // Run the denial on the main server thread
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
+        // Run the denial on the main server thread and wait for completion
+        try {
             // Create a fake CommandSender for the denial
             ConsoleCommandSender consoleSender = Bukkit.getConsoleSender();
 
-            boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, false, consoleSender);
+            // Run synchronously and wait for result
+            boolean success = Bukkit.getScheduler().callSyncMethod(plugin, () ->
+                    plugin.getPunishmentQueueManager().processApproval(approvalId, false, consoleSender)
+            ).get();
 
             if (success) {
                 logger.info("Web panel: Punishment " + approvalId + " denied successfully by " + finalAdminName);
+                ctx.json(Map.of("success", true, "message", "Punishment denied successfully"));
             } else {
                 logger.warning("Web panel: Failed to deny punishment " + approvalId);
+                ctx.status(404);
+                ctx.json(Map.of("success", false, "error", "Punishment not found or already processed"));
             }
-        });
-
-        // Respond immediately to the web request
-        ctx.json(Map.of("success", true, "message", "Denial request received and being processed"));
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error denying punishment: " + e.getMessage(), e);
+            ctx.status(500);
+            ctx.json(Map.of("success", false, "error", "Server error: " + e.getMessage()));
+        }
     }
 
     private void getPlayers(Context ctx) {
