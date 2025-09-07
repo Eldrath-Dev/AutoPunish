@@ -79,6 +79,14 @@ public class PunishmentManager {
         logger.info("Selected punishment: Type=" + type + ", Duration=" + duration +
                 " (Based on rule tier: " + ruleTier + ", severity tier: " + severityTier + ")");
 
+        // Check if this punishment needs admin approval
+        PunishmentQueueManager queueManager = plugin.getPunishmentQueueManager();
+        if (queueManager != null && queueManager.needsApproval(type, duration)) {
+            // Queue the punishment instead of applying it immediately
+            queueManager.queuePunishment(target, ruleName, type, duration, sender, severityScore);
+            return true;
+        }
+
         // Fire the PrePunishmentEvent
         PrePunishmentEvent prePunishmentEvent = null;
         if (sender instanceof Player) {
@@ -143,6 +151,50 @@ public class PunishmentManager {
                     ", Total severity score: " + severityScore + ")");
         } else {
             sender.sendMessage("§cFailed to apply punishment to " + target.getName());
+        }
+
+        return success;
+    }
+
+    /**
+     * Execute a punishment that has been approved by an admin
+     */
+    public boolean executeApprovedPunishment(OfflinePlayer target, String rule, String type, String duration,
+                                             String staffName, UUID staffUuid, String adminName) {
+        // Create punishment record
+        Punishment punishmentRecord = new Punishment(
+                target.getUniqueId(),
+                target.getName() != null ? target.getName() : "Unknown",
+                rule,
+                type,
+                duration,
+                staffName + " (Approved by: " + adminName + ")",
+                staffUuid
+        );
+
+        // Apply the punishment
+        boolean success = applyPunishment(target, type, duration, rule);
+
+        if (success) {
+            // Save to database
+            try {
+                databaseManager.savePunishment(punishmentRecord);
+                logger.info("Approved punishment record saved to database successfully");
+            } catch (Exception e) {
+                logger.log(Level.SEVERE, "Failed to save approved punishment to database", e);
+                return false;
+            }
+
+            // Fire the PunishmentAppliedEvent
+            Bukkit.getPluginManager().callEvent(new PunishmentAppliedEvent(punishmentRecord));
+
+            // Send webhook notification
+            try {
+                webhookManager.sendPunishmentWebhook(punishmentRecord, 0, null, null, 0);
+                logger.info("Approved punishment webhook notification sent successfully");
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "Failed to send approved punishment webhook", e);
+            }
         }
 
         return success;

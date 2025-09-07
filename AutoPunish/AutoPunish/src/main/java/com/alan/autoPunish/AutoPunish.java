@@ -1,14 +1,12 @@
 package com.alan.autoPunish;
 
 import com.alan.autoPunish.api.AutoPunishAPI;
-import com.alan.autoPunish.commands.PunishCommand;
-import com.alan.autoPunish.commands.PunishReloadCommand;
-import com.alan.autoPunish.commands.PunishmentsCommand;
-import com.alan.autoPunish.commands.SeverityCommand;
+import com.alan.autoPunish.commands.*;
 import com.alan.autoPunish.listeners.ChatListener;
 import com.alan.autoPunish.managers.ConfigManager;
 import com.alan.autoPunish.managers.DatabaseManager;
 import com.alan.autoPunish.managers.PunishmentManager;
+import com.alan.autoPunish.managers.PunishmentQueueManager;
 import com.alan.autoPunish.managers.WebhookManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -22,6 +20,7 @@ public class AutoPunish extends JavaPlugin {
     private ConfigManager configManager;
     private DatabaseManager databaseManager;
     private WebhookManager webhookManager;
+    private PunishmentQueueManager punishmentQueueManager;
     private PunishmentManager punishmentManager;
 
     @Override
@@ -34,6 +33,7 @@ public class AutoPunish extends JavaPlugin {
         this.configManager = new ConfigManager(this);
         this.databaseManager = new DatabaseManager(this, configManager);
         this.webhookManager = new WebhookManager(this, configManager);
+        this.punishmentQueueManager = new PunishmentQueueManager(this);
         this.punishmentManager = new PunishmentManager(this, configManager, databaseManager, webhookManager);
 
         // Initialize API
@@ -55,11 +55,13 @@ public class AutoPunish extends JavaPlugin {
         getCommand("punishments").setExecutor(new PunishmentsCommand(this));
         getCommand("punishreload").setExecutor(new PunishReloadCommand(this));
         getCommand("severity").setExecutor(new SeverityCommand(this));
+        getCommand("punishadmin").setExecutor(new PunishAdminCommand(this));
 
         // Register tab completers
         getCommand("punish").setTabCompleter(new PunishCommand(this));
         getCommand("punishments").setTabCompleter(new PunishmentsCommand(this));
         getCommand("severity").setTabCompleter(new SeverityCommand(this));
+        getCommand("punishadmin").setTabCompleter(new PunishAdminCommand(this));
     }
 
     private void registerListeners() {
@@ -94,5 +96,9 @@ public class AutoPunish extends JavaPlugin {
 
     public PunishmentManager getPunishmentManager() {
         return punishmentManager;
+    }
+
+    public PunishmentQueueManager getPunishmentQueueManager() {
+        return punishmentQueueManager;
     }
 }

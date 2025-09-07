@@ -22,6 +22,10 @@ commands:
     description: Check a player's punishment severity score
     usage: /severity <player>
     permission: autopunish.severity
+  punishadmin:
+    description: Manage pending punishments
+    usage: /punishadmin <list|approve|deny> [approvalId]
+    permission: autopunish.admin
 
 permissions:
   autopunish.punish:
@@ -35,6 +39,9 @@ permissions:
     default: op
   autopunish.severity:
     description: Allows checking punishment severity scores
+    default: op
+  autopunish.admin:
+    description: Allows approving or denying punishments
     default: op
   autopunish.muted:
     description: Flag for muted players
