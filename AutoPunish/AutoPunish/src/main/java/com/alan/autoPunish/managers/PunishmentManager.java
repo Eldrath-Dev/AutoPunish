@@ -1,6 +1,8 @@
 package com.alan.autoPunish.managers;
 
 import com.alan.autoPunish.AutoPunish;
+import com.alan.autoPunish.api.events.PrePunishmentEvent;
+import com.alan.autoPunish.api.events.PunishmentAppliedEvent;
 import com.alan.autoPunish.models.Punishment;
 import com.alan.autoPunish.models.PunishmentRule;
 import com.alan.autoPunish.utils.TimeUtil;
@@ -77,6 +79,23 @@ public class PunishmentManager {
         logger.info("Selected punishment: Type=" + type + ", Duration=" + duration +
                 " (Based on rule tier: " + ruleTier + ", severity tier: " + severityTier + ")");
 
+        // Fire the PrePunishmentEvent
+        PrePunishmentEvent prePunishmentEvent = null;
+        if (sender instanceof Player) {
+            prePunishmentEvent = new PrePunishmentEvent(target, ruleName, type, duration, (Player) sender);
+            Bukkit.getPluginManager().callEvent(prePunishmentEvent);
+
+            // Check if the event was cancelled
+            if (prePunishmentEvent.isCancelled()) {
+                logger.info("Punishment cancelled by another plugin");
+                return false;
+            }
+
+            // Update type and duration in case they were modified by event handlers
+            type = prePunishmentEvent.getType();
+            duration = prePunishmentEvent.getDuration();
+        }
+
         // Create punishment record
         String staffName = sender instanceof Player ? sender.getName() : "Console";
         UUID staffUuid = sender instanceof Player ? ((Player) sender).getUniqueId() : new UUID(0, 0);
@@ -103,6 +122,9 @@ public class PunishmentManager {
                 logger.log(Level.SEVERE, "Failed to save punishment to database", e);
                 sender.sendMessage("§eWarning: Punishment applied but failed to save to database.");
             }
+
+            // Fire the PunishmentAppliedEvent
+            Bukkit.getPluginManager().callEvent(new PunishmentAppliedEvent(punishmentRecord));
 
             // Send webhook notification with enhanced information
             try {

@@ -1,5 +1,6 @@
 package com.alan.autoPunish;
 
+import com.alan.autoPunish.api.AutoPunishAPI;
 import com.alan.autoPunish.commands.PunishCommand;
 import com.alan.autoPunish.commands.PunishReloadCommand;
 import com.alan.autoPunish.commands.PunishmentsCommand;
@@ -34,6 +35,10 @@ public class AutoPunish extends JavaPlugin {
         this.databaseManager = new DatabaseManager(this, configManager);
         this.webhookManager = new WebhookManager(this, configManager);
         this.punishmentManager = new PunishmentManager(this, configManager, databaseManager, webhookManager);
+
+        // Initialize API
+        AutoPunishAPI.init(this);
+        logger.info("AutoPunish API initialized successfully!");
 
         // Register commands
         registerCommands();
