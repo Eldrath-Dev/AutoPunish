@@ -10,6 +10,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -26,14 +27,14 @@ public class WebhookManager {
         this.dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     }
 
-    public void sendPunishmentWebhook(Punishment punishment) {
+    public void sendPunishmentWebhook(Punishment punishment, int offenseNumber, List<Punishment> previousPunishments) {
         String webhookUrl = configManager.getDiscordWebhook();
         if (webhookUrl == null || webhookUrl.isEmpty()) {
             logger.warning("Discord webhook URL is not configured.");
             return;
         }
 
-        String jsonPayload = formatPunishmentForDiscord(punishment);
+        String jsonPayload = formatPunishmentForDiscord(punishment, offenseNumber, previousPunishments);
 
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
@@ -63,7 +64,7 @@ public class WebhookManager {
         });
     }
 
-    private String formatPunishmentForDiscord(Punishment punishment) {
+    private String formatPunishmentForDiscord(Punishment punishment, int offenseNumber, List<Punishment> previousPunishments) {
         String formattedDuration;
         if (punishment.getDuration().equals("0")) {
             formattedDuration = "Permanent";
@@ -72,14 +73,35 @@ public class WebhookManager {
             formattedDuration = TimeUtil.formatDuration(durationMillis);
         }
 
+        StringBuilder previousViolationsBuilder = new StringBuilder();
+        if (!previousPunishments.isEmpty()) {
+            previousViolationsBuilder.append("\\n\\n**Previous Violations:**");
+            int count = 1;
+            for (Punishment prev : previousPunishments) {
+                String prevDuration = prev.getDuration().equals("0") ?
+                        "Permanent" : prev.getDuration();
+
+                previousViolationsBuilder.append("\\n")
+                        .append(count).append(". ")
+                        .append(prev.getType().substring(0, 1).toUpperCase())
+                        .append(prev.getType().substring(1))
+                        .append(" (").append(prevDuration).append(")")
+                        .append(" - ").append(dateFormat.format(prev.getDate()));
+                count++;
+            }
+        }
+
         String content = "**Punishment Issued**\\n" +
                 "Player: " + punishment.getPlayerName() + "\\n" +
                 "Rule: " + punishment.getRule() + "\\n" +
+                "Offense #: " + offenseNumber + "\\n" +
                 "Punishment: " + punishment.getType().substring(0, 1).toUpperCase() +
                 punishment.getType().substring(1) +
                 (formattedDuration.equals("Permanent") ? " (Permanent)" : " (" + punishment.getDuration() + ")") + "\\n" +
                 "Staff: " + punishment.getStaffName() + "\\n" +
-                "Date: " + dateFormat.format(punishment.getDate());
+                "Date: " + dateFormat.format(punishment.getDate()) +
+                (previousPunishments.isEmpty() ? "\\n\\n*First offense for this rule.*" : previousViolationsBuilder.toString()) +
+                "\\n\\n*Automated punishment determined by escalation system.*";
 
         // Format as JSON for Discord webhook
         return "{\"content\":\"" + content + "\"}";
