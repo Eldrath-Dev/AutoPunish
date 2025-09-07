@@ -26,6 +26,7 @@ public class DatabaseManager {
 
     private void setupDatabase() {
         String storageType = configManager.getStorageType();
+        logger.info("Setting up database with storage type: " + storageType);
 
         try {
             if (storageType.equalsIgnoreCase("mysql")) {
@@ -38,32 +39,67 @@ public class DatabaseManager {
             logger.info("Database connection established successfully!");
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to connect to database: " + e.getMessage(), e);
+            e.printStackTrace();
         }
     }
 
     private void setupSqlite() throws SQLException {
         try {
             Class.forName("org.sqlite.JDBC");
+            logger.info("SQLite JDBC driver loaded successfully!");
         } catch (ClassNotFoundException e) {
             logger.log(Level.SEVERE, "SQLite JDBC driver not found", e);
+            e.printStackTrace();
             throw new SQLException("SQLite JDBC driver not found");
         }
 
         File dataFolder = plugin.getDataFolder();
         if (!dataFolder.exists()) {
-            dataFolder.mkdirs();
+            logger.info("Creating plugin data folder...");
+            boolean created = dataFolder.mkdirs();
+            if (!created) {
+                logger.warning("Failed to create plugin data folder!");
+            }
         }
 
-        String url = "jdbc:sqlite:" + new File(dataFolder, "punishments.db").getAbsolutePath();
-        connection = DriverManager.getConnection(url);
+        File dbFile = new File(dataFolder, "punishments.db");
+        String url = "jdbc:sqlite:" + dbFile.getAbsolutePath();
+        logger.info("Connecting to SQLite database at: " + dbFile.getAbsolutePath());
+
+        try {
+            connection = DriverManager.getConnection(url);
+
+            // Test the connection with a simple query
+            try (Statement stmt = connection.createStatement()) {
+                stmt.execute("SELECT 1");
+            }
+
+            logger.info("SQLite connection established successfully!");
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Failed to connect to SQLite database: " + e.getMessage(), e);
+            logger.log(Level.SEVERE, "Database file location: " + dbFile.getAbsolutePath());
+            logger.log(Level.SEVERE, "Is file writable: " + dbFile.canWrite());
+            logger.log(Level.SEVERE, "Is parent directory writable: " + dataFolder.canWrite());
+            e.printStackTrace();
+            throw e;
+        }
     }
 
     private void setupMysql() throws SQLException {
         try {
-            Class.forName("com.mysql.jdbc.Driver");
+            // Use the newer driver class name
+            Class.forName("com.mysql.cj.jdbc.Driver");
+            logger.info("MySQL JDBC driver loaded successfully!");
         } catch (ClassNotFoundException e) {
-            logger.log(Level.SEVERE, "MySQL JDBC driver not found", e);
-            throw new SQLException("MySQL JDBC driver not found");
+            try {
+                // Try with the older driver class name as fallback
+                Class.forName("com.mysql.jdbc.Driver");
+                logger.info("MySQL JDBC driver (legacy) loaded successfully!");
+            } catch (ClassNotFoundException e2) {
+                logger.log(Level.SEVERE, "MySQL JDBC driver not found", e);
+                e.printStackTrace();
+                throw new SQLException("MySQL JDBC driver not found");
+            }
         }
 
         String host = configManager.getMysqlConfig().get("host");
@@ -72,12 +108,24 @@ public class DatabaseManager {
         String username = configManager.getMysqlConfig().get("username");
         String password = configManager.getMysqlConfig().get("password");
 
-        String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?useSSL=false";
-        connection = DriverManager.getConnection(url, username, password);
+        logger.info("Connecting to MySQL database at " + host + ":" + port + "/" + database);
+
+        String url = "jdbc:mysql://" + host + ":" + port + "/" + database +
+                "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
+
+        try {
+            connection = DriverManager.getConnection(url, username, password);
+            logger.info("MySQL connection established successfully!");
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Failed to connect to MySQL database: " + e.getMessage(), e);
+            e.printStackTrace();
+            throw e;
+        }
     }
 
     private void createTables() throws SQLException {
         try (Statement statement = connection.createStatement()) {
+            logger.info("Creating database tables if they don't exist...");
             statement.execute(
                     "CREATE TABLE IF NOT EXISTS punishments (" +
                             "id VARCHAR(36) PRIMARY KEY, " +
@@ -91,6 +139,11 @@ public class DatabaseManager {
                             "date TIMESTAMP NOT NULL" +
                             ");"
             );
+            logger.info("Database tables created successfully!");
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Failed to create database tables: " + e.getMessage(), e);
+            e.printStackTrace();
+            throw e;
         }
     }
 
@@ -109,10 +162,11 @@ public class DatabaseManager {
             statement.setString(8, punishment.getStaffUuid().toString());
             statement.setTimestamp(9, new Timestamp(punishment.getDate().getTime()));
 
-            statement.executeUpdate();
-            logger.info("Saved punishment for player " + punishment.getPlayerName());
+            int updated = statement.executeUpdate();
+            logger.info("Saved punishment for player " + punishment.getPlayerName() + " (rows affected: " + updated + ")");
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to save punishment: " + e.getMessage(), e);
+            e.printStackTrace();
         }
     }
 
@@ -139,8 +193,10 @@ public class DatabaseManager {
                     punishments.add(punishment);
                 }
             }
+            logger.info("Retrieved " + punishments.size() + " punishments for player UUID " + playerUuid);
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to get punishment history: " + e.getMessage(), e);
+            e.printStackTrace();
         }
 
         return punishments;
@@ -169,11 +225,39 @@ public class DatabaseManager {
                     punishments.add(punishment);
                 }
             }
+            logger.info("Retrieved " + punishments.size() + " punishments for player UUID " + playerUuid + " and rule " + rule);
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to get punishment history for rule: " + e.getMessage(), e);
+            e.printStackTrace();
         }
 
         return punishments;
+    }
+
+    /**
+     * Test database connection and report status
+     * @return true if connection is valid, false otherwise
+     */
+    public boolean testConnection() {
+        try {
+            if (connection == null || connection.isClosed()) {
+                logger.severe("Database connection is null or closed!");
+                return false;
+            }
+
+            try (Statement stmt = connection.createStatement()) {
+                ResultSet rs = stmt.executeQuery("SELECT 1");
+                if (rs.next()) {
+                    logger.info("Database connection test successful!");
+                    return true;
+                }
+            }
+            return false;
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Database connection test failed: " + e.getMessage(), e);
+            e.printStackTrace();
+            return false;
+        }
     }
 
     public void close() {
@@ -183,6 +267,7 @@ public class DatabaseManager {
                 logger.info("Database connection closed");
             } catch (SQLException e) {
                 logger.log(Level.SEVERE, "Error closing database connection: " + e.getMessage(), e);
+                e.printStackTrace();
             }
         }
     }
