@@ -3,11 +3,7 @@ package com.alan.autoPunish;
 import com.alan.autoPunish.api.AutoPunishAPI;
 import com.alan.autoPunish.commands.*;
 import com.alan.autoPunish.listeners.ChatListener;
-import com.alan.autoPunish.managers.ConfigManager;
-import com.alan.autoPunish.managers.DatabaseManager;
-import com.alan.autoPunish.managers.PunishmentManager;
-import com.alan.autoPunish.managers.PunishmentQueueManager;
-import com.alan.autoPunish.managers.WebhookManager;
+import com.alan.autoPunish.managers.*;
 import com.alan.autoPunish.utils.ConfigUtils;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -23,6 +19,7 @@ public class AutoPunish extends JavaPlugin {
     private WebhookManager webhookManager;
     private PunishmentQueueManager punishmentQueueManager;
     private PunishmentManager punishmentManager;
+    private WebPanelManager webPanelManager;
 
     @Override
     public void onEnable() {
@@ -47,6 +44,13 @@ public class AutoPunish extends JavaPlugin {
         // Initialize API
         AutoPunishAPI.init(this);
         logger.info("AutoPunish API initialized successfully!");
+
+        // Start web panel if enabled
+        if (getConfig().getBoolean("web-panel.enabled", true)) {
+            this.webPanelManager = new WebPanelManager(this);
+            this.webPanelManager.start();
+            logger.info("Web panel initialized on port " + getConfig().getInt("web-panel.port", 8080));
+        }
 
         // Register commands
         registerCommands();
@@ -78,6 +82,12 @@ public class AutoPunish extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        // Stop web panel
+        if (webPanelManager != null) {
+            webPanelManager.stop();
+            logger.info("Web panel stopped");
+        }
+
         // Close database connection
         if (databaseManager != null) {
             databaseManager.close();
@@ -108,5 +118,9 @@ public class AutoPunish extends JavaPlugin {
 
     public PunishmentQueueManager getPunishmentQueueManager() {
         return punishmentQueueManager;
+    }
+
+    public WebPanelManager getWebPanelManager() {
+        return webPanelManager;
     }
 }
