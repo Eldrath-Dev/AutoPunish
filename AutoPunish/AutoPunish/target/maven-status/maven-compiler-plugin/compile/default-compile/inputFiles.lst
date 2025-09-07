@@ -1,7 +1,11 @@
+C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\api\AutoPunishAPI.java
+C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\api\events\PrePunishmentEvent.java
+C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\api\events\PunishmentAppliedEvent.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\AutoPunish.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\commands\PunishCommand.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\commands\PunishmentsCommand.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\commands\PunishReloadCommand.java
+C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\commands\SeverityCommand.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\listeners\ChatListener.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\managers\ConfigManager.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\managers\DatabaseManager.java

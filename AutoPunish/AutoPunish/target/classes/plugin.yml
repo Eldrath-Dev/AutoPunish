@@ -18,6 +18,10 @@ commands:
     description: Reload the AutoPunish configuration
     usage: /punishreload
     permission: autopunish.reload
+  severity:
+    description: Check a player's punishment severity score
+    usage: /severity <player>
+    permission: autopunish.severity
 
 permissions:
   autopunish.punish:
@@ -28,6 +32,9 @@ permissions:
     default: op
   autopunish.reload:
     description: Allows reloading the configuration
+    default: op
+  autopunish.severity:
+    description: Allows checking punishment severity scores
     default: op
   autopunish.muted:
     description: Flag for muted players
