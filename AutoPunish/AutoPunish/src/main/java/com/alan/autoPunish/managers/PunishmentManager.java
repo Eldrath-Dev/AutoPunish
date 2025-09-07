@@ -42,15 +42,27 @@ public class PunishmentManager {
             return false;
         }
 
-        // Get previous punishments for this rule
-        List<Punishment> previousPunishments =
+        // Get previous punishments for this specific rule (for history display)
+        List<Punishment> ruleSpecificPunishments =
                 databaseManager.getPunishmentHistoryForRule(target.getUniqueId(), ruleName);
 
-        logger.info("Player " + target.getName() + " has " + previousPunishments.size() +
-                " previous punishments for rule: " + ruleName);
+        // Get ALL previous punishments for this player (for punishment determination)
+        List<Punishment> allPunishments = databaseManager.getPunishmentHistory(target.getUniqueId());
 
-        // Determine the appropriate tier based on previous punishments
-        int tier = previousPunishments.size() + 1;
+        // Calculate the total offense count and severity score
+        int totalOffenses = allPunishments.size();
+        int severityScore = calculateSeverityScore(allPunishments);
+
+        logger.info("Player " + target.getName() + " has " + totalOffenses +
+                " total previous punishments with severity score: " + severityScore);
+        logger.info("For rule " + ruleName + " specifically: " + ruleSpecificPunishments.size() + " previous violations");
+
+        // Determine the appropriate tier based on overall punishment history
+        // We'll use the maximum of: rule-specific count or general severity-based tier
+        int ruleTier = ruleSpecificPunishments.size() + 1;
+        int severityTier = Math.min(determineGlobalTier(severityScore), rule.getPunishmentTiers().size());
+        int tier = Math.max(ruleTier, severityTier);
+
         Map<String, String> punishment = rule.getTier(tier);
 
         if (punishment == null) {
@@ -62,7 +74,8 @@ public class PunishmentManager {
         String type = punishment.get("type");
         String duration = punishment.get("duration");
 
-        logger.info("Selected punishment: Type=" + type + ", Duration=" + duration);
+        logger.info("Selected punishment: Type=" + type + ", Duration=" + duration +
+                " (Based on rule tier: " + ruleTier + ", severity tier: " + severityTier + ")");
 
         // Create punishment record
         String staffName = sender instanceof Player ? sender.getName() : "Console";
@@ -93,7 +106,7 @@ public class PunishmentManager {
 
             // Send webhook notification with enhanced information
             try {
-                webhookManager.sendPunishmentWebhook(punishmentRecord, tier, previousPunishments);
+                webhookManager.sendPunishmentWebhook(punishmentRecord, tier, ruleSpecificPunishments, allPunishments, severityScore);
                 logger.info("Punishment webhook notification sent successfully");
             } catch (Exception e) {
                 logger.log(Level.WARNING, "Failed to send webhook notification", e);
@@ -103,12 +116,69 @@ public class PunishmentManager {
             // Notify the staff member
             sender.sendMessage("§aSuccessfully punished " + target.getName() + " for " + ruleName +
                     " (Punishment: " + type + ", Duration: " +
-                    (duration.equals("0") ? "Permanent" : duration) + ", Offense #" + tier + ")");
+                    (duration.equals("0") ? "Permanent" : duration) +
+                    ", Rule offense #" + ruleTier +
+                    ", Total severity score: " + severityScore + ")");
         } else {
             sender.sendMessage("§cFailed to apply punishment to " + target.getName());
         }
 
         return success;
+    }
+
+    /**
+     * Calculate a severity score based on all previous punishments
+     * This helps determine escalation across different rule types
+     */
+    private int calculateSeverityScore(List<Punishment> punishments) {
+        int score = 0;
+        long now = System.currentTimeMillis();
+
+        for (Punishment p : punishments) {
+            // Base points by punishment type
+            int typePoints;
+            switch (p.getType().toLowerCase()) {
+                case "warn":
+                    typePoints = 1;
+                    break;
+                case "mute":
+                    typePoints = 2;
+                    break;
+                case "kick":
+                    typePoints = 2;
+                    break;
+                case "demotion":
+                    typePoints = 3;
+                    break;
+                case "ban":
+                    // Permanent bans are more severe
+                    typePoints = p.getDuration().equals("0") ? 5 : 3;
+                    break;
+                default:
+                    typePoints = 1;
+            }
+
+            // Time decay factor - violations get "half as important" after 30 days
+            long ageInDays = (now - p.getDate().getTime()) / (1000 * 60 * 60 * 24);
+            double timeFactor = Math.pow(0.5, ageInDays / 30.0); // Half weight every 30 days
+
+            // Add weighted points to score
+            score += Math.max(1, (int)(typePoints * timeFactor));
+        }
+
+        return score;
+    }
+
+    /**
+     * Determine global tier based on overall severity score
+     */
+    private int determineGlobalTier(int severityScore) {
+        // Simple mapping of severity score to tier
+        if (severityScore <= 2) return 1;
+        if (severityScore <= 5) return 2;
+        if (severityScore <= 10) return 3;
+        if (severityScore <= 20) return 4;
+        return 5; // Max tier for very severe violation history
     }
 
     private boolean applyPunishment(OfflinePlayer target, String type, String duration, String reason) {

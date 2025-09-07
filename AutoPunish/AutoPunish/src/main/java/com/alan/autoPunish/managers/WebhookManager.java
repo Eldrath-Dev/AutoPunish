@@ -27,14 +27,26 @@ public class WebhookManager {
         this.dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     }
 
-    public void sendPunishmentWebhook(Punishment punishment, int offenseNumber, List<Punishment> previousPunishments) {
+    // Overload the method to maintain backward compatibility
+    public void sendPunishmentWebhook(Punishment punishment) {
+        sendPunishmentWebhook(punishment, 1, null);
+    }
+
+    // Overload for rule-specific punishments only
+    public void sendPunishmentWebhook(Punishment punishment, int tier, List<Punishment> rulePunishments) {
+        sendPunishmentWebhook(punishment, tier, rulePunishments, null, 0);
+    }
+
+    // Main method with all punishment information
+    public void sendPunishmentWebhook(Punishment punishment, int tier, List<Punishment> rulePunishments,
+                                      List<Punishment> allPunishments, int severityScore) {
         String webhookUrl = configManager.getDiscordWebhook();
         if (webhookUrl == null || webhookUrl.isEmpty()) {
             logger.warning("Discord webhook URL is not configured.");
             return;
         }
 
-        String jsonPayload = formatPunishmentForDiscord(punishment, offenseNumber, previousPunishments);
+        String jsonPayload = formatPunishmentForDiscord(punishment, tier, rulePunishments, allPunishments, severityScore);
 
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
@@ -64,7 +76,10 @@ public class WebhookManager {
         });
     }
 
-    private String formatPunishmentForDiscord(Punishment punishment, int offenseNumber, List<Punishment> previousPunishments) {
+    private String formatPunishmentForDiscord(Punishment punishment, int tier,
+                                              List<Punishment> rulePunishments,
+                                              List<Punishment> allPunishments,
+                                              int severityScore) {
         String formattedDuration;
         if (punishment.getDuration().equals("0")) {
             formattedDuration = "Permanent";
@@ -73,15 +88,16 @@ public class WebhookManager {
             formattedDuration = TimeUtil.formatDuration(durationMillis);
         }
 
-        StringBuilder previousViolationsBuilder = new StringBuilder();
-        if (!previousPunishments.isEmpty()) {
-            previousViolationsBuilder.append("\\n\\n**Previous Violations:**");
+        // Format rule-specific violations
+        StringBuilder ruleViolationsBuilder = new StringBuilder();
+        if (rulePunishments != null && !rulePunishments.isEmpty()) {
+            ruleViolationsBuilder.append("\\n\\n**Previous Violations for ").append(punishment.getRule()).append(":**");
             int count = 1;
-            for (Punishment prev : previousPunishments) {
+            for (Punishment prev : rulePunishments) {
                 String prevDuration = prev.getDuration().equals("0") ?
                         "Permanent" : prev.getDuration();
 
-                previousViolationsBuilder.append("\\n")
+                ruleViolationsBuilder.append("\\n")
                         .append(count).append(". ")
                         .append(prev.getType().substring(0, 1).toUpperCase())
                         .append(prev.getType().substring(1))
@@ -91,17 +107,65 @@ public class WebhookManager {
             }
         }
 
+        // Format recent violations from ALL rules (max 5)
+        StringBuilder recentViolationsBuilder = new StringBuilder();
+        if (allPunishments != null && allPunishments.size() > 0) {
+            recentViolationsBuilder.append("\\n\\n**Recent Violations (All Rules):**");
+
+            // Sort by date (most recent first) and limit to last 5
+            allPunishments.sort((p1, p2) -> p2.getDate().compareTo(p1.getDate()));
+            int displayCount = Math.min(allPunishments.size(), 5);
+
+            for (int i = 0; i < displayCount; i++) {
+                Punishment prev = allPunishments.get(i);
+
+                // Skip the current punishment if it's in the list
+                if (prev.getId().equals(punishment.getId())) {
+                    continue;
+                }
+
+                String prevDuration = prev.getDuration().equals("0") ?
+                        "Permanent" : prev.getDuration();
+
+                recentViolationsBuilder.append("\\n")
+                        .append(i+1).append(". ")
+                        .append(prev.getRule())
+                        .append(" - ")
+                        .append(prev.getType().substring(0, 1).toUpperCase())
+                        .append(prev.getType().substring(1))
+                        .append(" (").append(prevDuration).append(")")
+                        .append(" - ").append(dateFormat.format(prev.getDate()));
+            }
+        }
+
         String content = "**Punishment Issued**\\n" +
                 "Player: " + punishment.getPlayerName() + "\\n" +
                 "Rule: " + punishment.getRule() + "\\n" +
-                "Offense #: " + offenseNumber + "\\n" +
+                "Offense #: " + tier + "\\n" +
                 "Punishment: " + punishment.getType().substring(0, 1).toUpperCase() +
                 punishment.getType().substring(1) +
                 (formattedDuration.equals("Permanent") ? " (Permanent)" : " (" + punishment.getDuration() + ")") + "\\n" +
                 "Staff: " + punishment.getStaffName() + "\\n" +
-                "Date: " + dateFormat.format(punishment.getDate()) +
-                (previousPunishments.isEmpty() ? "\\n\\n*First offense for this rule.*" : previousViolationsBuilder.toString()) +
-                "\\n\\n*Automated punishment determined by escalation system.*";
+                "Date: " + dateFormat.format(punishment.getDate());
+
+        // Add severity score if available
+        if (severityScore > 0) {
+            content += "\\nTotal Severity Score: " + severityScore;
+        }
+
+        // Add rule-specific history
+        if (rulePunishments == null || rulePunishments.isEmpty()) {
+            content += "\\n\\n*First offense for this rule.*";
+        } else {
+            content += ruleViolationsBuilder.toString();
+        }
+
+        // Add recent violations from all rules
+        if (allPunishments != null && allPunishments.size() > 0) {
+            content += recentViolationsBuilder.toString();
+        }
+
+        content += "\\n\\n*Automated punishment determined by escalation system.*";
 
         // Format as JSON for Discord webhook
         return "{\"content\":\"" + content + "\"}";
