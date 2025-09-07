@@ -194,18 +194,24 @@ public class WebPanelManager {
         String adminName = ctx.queryParam("adminName");
         if (adminName == null) adminName = "WebAdmin";
 
-        // Create a fake CommandSender for the approval
-        ConsoleCommandSender consoleSender = Bukkit.getConsoleSender();
-        // This is a workaround - in a real implementation, create a custom CommandSender
+        final String finalAdminName = adminName;
 
-        boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, true, consoleSender);
+        // Run the approval on the main server thread
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            // Create a fake CommandSender for the approval
+            ConsoleCommandSender consoleSender = Bukkit.getConsoleSender();
 
-        if (success) {
-            ctx.json(Map.of("success", true, "message", "Punishment approved successfully"));
-        } else {
-            ctx.status(404);
-            ctx.json(Map.of("success", false, "error", "Punishment not found or already processed"));
-        }
+            boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, true, consoleSender);
+
+            if (success) {
+                logger.info("Web panel: Punishment " + approvalId + " approved successfully by " + finalAdminName);
+            } else {
+                logger.warning("Web panel: Failed to approve punishment " + approvalId);
+            }
+        });
+
+        // Respond immediately to the web request
+        ctx.json(Map.of("success", true, "message", "Approval request received and being processed"));
     }
 
     private void denyQueuedPunishment(Context ctx) {
@@ -213,18 +219,24 @@ public class WebPanelManager {
         String adminName = ctx.queryParam("adminName");
         if (adminName == null) adminName = "WebAdmin";
 
-        // Create a fake CommandSender for the denial
-        ConsoleCommandSender consoleSender = Bukkit.getConsoleSender();
-        // This is a workaround - in a real implementation, create a custom CommandSender
+        final String finalAdminName = adminName;
 
-        boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, false, consoleSender);
+        // Run the denial on the main server thread
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            // Create a fake CommandSender for the denial
+            ConsoleCommandSender consoleSender = Bukkit.getConsoleSender();
 
-        if (success) {
-            ctx.json(Map.of("success", true, "message", "Punishment denied successfully"));
-        } else {
-            ctx.status(404);
-            ctx.json(Map.of("success", false, "error", "Punishment not found or already processed"));
-        }
+            boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, false, consoleSender);
+
+            if (success) {
+                logger.info("Web panel: Punishment " + approvalId + " denied successfully by " + finalAdminName);
+            } else {
+                logger.warning("Web panel: Failed to deny punishment " + approvalId);
+            }
+        });
+
+        // Respond immediately to the web request
+        ctx.json(Map.of("success", true, "message", "Denial request received and being processed"));
     }
 
     private void getPlayers(Context ctx) {

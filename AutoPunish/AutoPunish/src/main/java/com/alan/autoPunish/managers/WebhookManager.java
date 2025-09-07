@@ -2,6 +2,7 @@ package com.alan.autoPunish.managers;
 
 import com.alan.autoPunish.AutoPunish;
 import com.alan.autoPunish.models.Punishment;
+import com.alan.autoPunish.models.QueuedPunishment;
 import com.alan.autoPunish.utils.TimeUtil;
 
 import java.io.IOException;
@@ -47,33 +48,53 @@ public class WebhookManager {
         }
 
         String jsonPayload = formatPunishmentForDiscord(punishment, tier, rulePunishments, allPunishments, severityScore);
+        sendWebhookRequest(webhookUrl, jsonPayload);
+    }
 
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-            try {
-                URL url = new URL(webhookUrl);
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestMethod("POST");
-                connection.setRequestProperty("Content-Type", "application/json");
-                connection.setRequestProperty("User-Agent", "AutoPunish/1.0");
-                connection.setDoOutput(true);
+    /**
+     * Send a webhook notification for a queued punishment that needs approval
+     */
+    public void sendQueuedPunishmentWebhook(QueuedPunishment punishment, int severityScore) {
+        String webhookUrl = configManager.getDiscordWebhook();
+        if (webhookUrl == null || webhookUrl.isEmpty()) {
+            logger.warning("Discord webhook URL is not configured.");
+            return;
+        }
 
-                try (OutputStream os = connection.getOutputStream()) {
-                    byte[] input = jsonPayload.getBytes(StandardCharsets.UTF_8);
-                    os.write(input, 0, input.length);
-                }
+        String jsonPayload = formatQueuedPunishmentForDiscord(punishment, severityScore);
+        sendWebhookRequest(webhookUrl, jsonPayload);
+    }
 
-                int responseCode = connection.getResponseCode();
-                if (responseCode >= 200 && responseCode < 300) {
-                    logger.info("Punishment webhook sent successfully");
-                } else {
-                    logger.warning("Failed to send webhook. Response code: " + responseCode);
-                }
+    /**
+     * Format a queued punishment for Discord webhook
+     */
+    private String formatQueuedPunishmentForDiscord(QueuedPunishment punishment, int severityScore) {
+        String formattedDuration;
+        if (punishment.getDuration().equals("0")) {
+            formattedDuration = "Permanent";
+        } else {
+            formattedDuration = punishment.getDuration();
+        }
 
-                connection.disconnect();
-            } catch (IOException e) {
-                logger.log(Level.SEVERE, "Error sending punishment webhook: " + e.getMessage(), e);
-            }
-        });
+        String content = "**Punishment Queued for Approval**\\n" +
+                "Player: " + punishment.getPlayerName() + "\\n" +
+                "Rule: " + punishment.getRule() + "\\n" +
+                "Requested Punishment: " + punishment.getType().substring(0, 1).toUpperCase() +
+                punishment.getType().substring(1) +
+                (formattedDuration.equals("Permanent") ? " (Permanent)" : " (" + punishment.getDuration() + ")") + "\\n" +
+                "Staff: " + punishment.getStaffName() + "\\n" +
+                "Date: " + dateFormat.format(punishment.getQueuedDate()) + "\\n" +
+                "Approval ID: " + punishment.getApprovalId();
+
+        if (severityScore > 0) {
+            content += "\\nSeverity Score: " + severityScore;
+        }
+
+        content += "\\n\\n**This punishment requires admin approval due to its severity.**\\n" +
+                "Please use `/punishadmin approve " + punishment.getApprovalId() + "` in-game or the web panel to approve.";
+
+        // Format as JSON for Discord webhook
+        return "{\"content\":\"" + content + "\"}";
     }
 
     private String formatPunishmentForDiscord(Punishment punishment, int tier,
@@ -169,5 +190,37 @@ public class WebhookManager {
 
         // Format as JSON for Discord webhook
         return "{\"content\":\"" + content + "\"}";
+    }
+
+    /**
+     * Helper method to send the webhook request
+     */
+    private void sendWebhookRequest(String webhookUrl, String jsonPayload) {
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                URL url = new URL(webhookUrl);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("POST");
+                connection.setRequestProperty("Content-Type", "application/json");
+                connection.setRequestProperty("User-Agent", "AutoPunish/1.0");
+                connection.setDoOutput(true);
+
+                try (OutputStream os = connection.getOutputStream()) {
+                    byte[] input = jsonPayload.getBytes(StandardCharsets.UTF_8);
+                    os.write(input, 0, input.length);
+                }
+
+                int responseCode = connection.getResponseCode();
+                if (responseCode >= 200 && responseCode < 300) {
+                    logger.info("Webhook sent successfully");
+                } else {
+                    logger.warning("Failed to send webhook. Response code: " + responseCode);
+                }
+
+                connection.disconnect();
+            } catch (IOException e) {
+                logger.log(Level.SEVERE, "Error sending webhook: " + e.getMessage(), e);
+            }
+        });
     }
 }

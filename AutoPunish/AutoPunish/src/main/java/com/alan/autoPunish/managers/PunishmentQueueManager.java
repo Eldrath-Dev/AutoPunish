@@ -136,6 +136,14 @@ public class PunishmentQueueManager {
         // Store in our queue
         queuedPunishments.put(queuedPunishment.getApprovalId(), queuedPunishment);
 
+        // Send webhook notification about the queued punishment
+        try {
+            plugin.getWebhookManager().sendQueuedPunishmentWebhook(queuedPunishment, severityScore);
+            logger.info("Queued punishment webhook notification sent successfully");
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "Failed to send webhook for queued punishment", e);
+        }
+
         // Notify staff member
         sender.sendMessage("§eSevere punishment has been queued for admin approval. Approval ID: §f" +
                 queuedPunishment.getApprovalId());
