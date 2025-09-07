@@ -8,6 +8,7 @@ import io.javalin.Javalin;
 import io.javalin.http.Context;
 import io.javalin.plugin.bundled.CorsPlugin;
 import org.bukkit.Bukkit;
+import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 
 import java.util.HashMap;
@@ -110,8 +111,7 @@ public class WebPanelManager {
         if (auth == null || !auth.startsWith("Bearer ")) {
             ctx.status(401);
             ctx.json(Map.of("error", "Unauthorized"));
-            ctx.halt();
-            return;
+            return; // Use return instead of halt()
         }
 
         // Validate the token (simple implementation - should use JWT in production)
@@ -119,7 +119,7 @@ public class WebPanelManager {
         if (!isValidToken(token)) {
             ctx.status(401);
             ctx.json(Map.of("error", "Invalid token"));
-            ctx.halt();
+            return; // Use return instead of halt()
         }
     }
 
@@ -191,9 +191,14 @@ public class WebPanelManager {
 
     private void approveQueuedPunishment(Context ctx) {
         String approvalId = ctx.pathParam("id");
-        String adminName = ctx.queryParam("adminName", "WebAdmin");
+        String adminName = ctx.queryParam("adminName");
+        if (adminName == null) adminName = "WebAdmin";
 
-        boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, true, ctx);
+        // Create a fake CommandSender for the approval
+        ConsoleCommandSender consoleSender = Bukkit.getConsoleSender();
+        // This is a workaround - in a real implementation, create a custom CommandSender
+
+        boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, true, consoleSender);
 
         if (success) {
             ctx.json(Map.of("success", true, "message", "Punishment approved successfully"));
@@ -205,9 +210,14 @@ public class WebPanelManager {
 
     private void denyQueuedPunishment(Context ctx) {
         String approvalId = ctx.pathParam("id");
-        String adminName = ctx.queryParam("adminName", "WebAdmin");
+        String adminName = ctx.queryParam("adminName");
+        if (adminName == null) adminName = "WebAdmin";
 
-        boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, false, ctx);
+        // Create a fake CommandSender for the denial
+        ConsoleCommandSender consoleSender = Bukkit.getConsoleSender();
+        // This is a workaround - in a real implementation, create a custom CommandSender
+
+        boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, false, consoleSender);
 
         if (success) {
             ctx.json(Map.of("success", true, "message", "Punishment denied successfully"));

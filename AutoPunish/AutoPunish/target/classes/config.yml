@@ -9,6 +9,13 @@ storage:
     username: "root"
     password: "password"
 
+# Web panel settings
+web-panel:
+  enabled: true
+  port: 8080
+  username: "admin"
+  password: "changeme123"  # Be sure to change this in production!
+
 # Approval system settings
 approval-system:
   enabled: true
