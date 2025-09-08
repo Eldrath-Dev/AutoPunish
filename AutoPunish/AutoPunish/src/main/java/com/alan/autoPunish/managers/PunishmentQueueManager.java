@@ -13,6 +13,12 @@ import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+// Add imports for API events
+import com.alan.autoPunish.api.events.PunishmentQueuedEvent;
+import com.alan.autoPunish.api.events.PunishmentApprovedEvent;
+import com.alan.autoPunish.api.events.PunishmentDeniedEvent;
+import com.alan.autoPunish.api.events.PlayerHistoryResetEvent;
+
 public class PunishmentQueueManager {
     private final AutoPunish plugin;
     private final Logger logger;
@@ -161,6 +167,9 @@ public class PunishmentQueueManager {
             logger.log(Level.WARNING, "Failed to send webhook for queued punishment", e);
         }
 
+        // Fire the PunishmentQueuedEvent
+        Bukkit.getPluginManager().callEvent(new PunishmentQueuedEvent(queuedPunishment, sender, severityScore));
+
         // Only send message if sender is a player
         if (sender instanceof Player) {
             sender.sendMessage("§eSevere punishment has been queued for admin approval. Approval ID: §f" +
@@ -223,6 +232,9 @@ public class PunishmentQueueManager {
                 // Notify all admins
                 notifyAdmins("§6[AutoPunish] §aPunishment for §f" + queued.getPlayerName() +
                         " §aapproved by §f" + admin.getName());
+
+                // Fire the PunishmentApprovedEvent
+                Bukkit.getPluginManager().callEvent(new PunishmentApprovedEvent(queued, admin));
             } else {
                 logger.warning("Failed to execute approved punishment for: " + queued.getPlayerName());
                 // Only send message if admin is a player (not console/web)
@@ -252,6 +264,9 @@ public class PunishmentQueueManager {
             } catch (Exception e) {
                 logger.log(Level.WARNING, "Failed to send webhook for denied punishment", e);
             }
+
+            // Fire the PunishmentDeniedEvent
+            Bukkit.getPluginManager().callEvent(new PunishmentDeniedEvent(queued, admin));
 
             // Only send message if admin is a player (not console/web)
             if (admin instanceof Player) {
@@ -295,6 +310,17 @@ public class PunishmentQueueManager {
                 plugin.getDatabaseManager().removeQueuedPunishment(entry.getValue().getApprovalId());
             }
         }
+
+        // Get player name for the event
+        String playerName = "Unknown";
+        OfflinePlayer player = Bukkit.getOfflinePlayer(playerUuid);
+        if (player != null && player.getName() != null) {
+            playerName = player.getName();
+        }
+
+        // Fire the PlayerHistoryResetEvent
+        PlayerHistoryResetEvent event = new PlayerHistoryResetEvent(playerUuid, playerName, Bukkit.getConsoleSender());
+        Bukkit.getPluginManager().callEvent(event);
 
         // Reset the player's history in the database
         return plugin.getDatabaseManager().resetPlayerHistory(playerUuid);
