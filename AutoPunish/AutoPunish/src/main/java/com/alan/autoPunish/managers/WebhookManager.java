@@ -66,6 +66,40 @@ public class WebhookManager {
     }
 
     /**
+     * Send a webhook notification for a denied punishment
+     */
+    public void sendDeniedPunishmentWebhook(QueuedPunishment punishment, String deniedBy) {
+        String webhookUrl = configManager.getDiscordWebhook();
+        if (webhookUrl == null || webhookUrl.isEmpty()) {
+            logger.warning("Discord webhook URL is not configured.");
+            return;
+        }
+
+        String formattedDuration;
+        if (punishment.getDuration().equals("0")) {
+            formattedDuration = "Permanent";
+        } else {
+            formattedDuration = punishment.getDuration();
+        }
+
+        String content = "**Punishment Denied**\\n" +
+                "Player: " + punishment.getPlayerName() + "\\n" +
+                "Rule: " + punishment.getRule() + "\\n" +
+                "Punishment: " + punishment.getType().substring(0, 1).toUpperCase() +
+                punishment.getType().substring(1) +
+                (formattedDuration.equals("Permanent") ? " (Permanent)" : " (" + punishment.getDuration() + ")") + "\\n" +
+                "Originally requested by: " + punishment.getStaffName() + "\\n" +
+                "Denied by: " + deniedBy + "\\n" +
+                "Date: " + dateFormat.format(punishment.getQueuedDate()) + "\\n" +
+                "Approval ID: " + punishment.getApprovalId();
+
+        // Format as JSON for Discord webhook
+        String jsonPayload = "{\"content\":\"" + content + "\"}";
+
+        sendWebhookRequest(webhookUrl, jsonPayload);
+    }
+
+    /**
      * Format a queued punishment for Discord webhook
      */
     private String formatQueuedPunishmentForDiscord(QueuedPunishment punishment, int severityScore) {

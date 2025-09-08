@@ -216,7 +216,11 @@ public class WebPanelManager {
         String adminName = ctx.queryParam("adminName");
         if (adminName == null) adminName = "WebAdmin";
 
-        logger.info("Web panel approve request received for ID: " + approvalId + " by admin: " + adminName);
+        logger.info("Web panel approve request received for ID: '" + approvalId + "' (length: " + approvalId.length() + ") by admin: " + adminName);
+
+        // Log the raw path param for debugging
+        logger.info("Raw path param map: " + ctx.pathParamMap());
+        logger.info("Path params: " + ctx.pathParamMap().keySet() + " -> " + ctx.pathParamMap().values());
 
         try {
             // Process the approval directly
@@ -245,7 +249,11 @@ public class WebPanelManager {
         String adminName = ctx.queryParam("adminName");
         if (adminName == null) adminName = "WebAdmin";
 
-        logger.info("Web panel deny request received for ID: " + approvalId + " by admin: " + adminName);
+        logger.info("Web panel deny request received for ID: '" + approvalId + "' (length: " + approvalId.length() + ") by admin: " + adminName);
+
+        // Log the raw path param for debugging
+        logger.info("Raw path param map: " + ctx.pathParamMap());
+        logger.info("Path params: " + ctx.pathParamMap().keySet() + " -> " + ctx.pathParamMap().values());
 
         try {
             // Process the denial directly

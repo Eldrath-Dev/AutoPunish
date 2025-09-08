@@ -208,10 +208,19 @@ function renderApprovals(approvals) {
 
 // Handle approval or denial
 async function handleApproval(id, isApproved) {
+    // Sanitize the ID to ensure it's just the approval ID
+    const sanitizedId = id.split('/').pop(); // Get the last part if it's a full path
+
     const action = isApproved ? 'approve' : 'deny';
+    const button = event.target;
+    const originalText = button.textContent;
+
+    // Disable button and show loading state
+    button.disabled = true;
+    button.textContent = 'Processing...';
 
     try {
-        const response = await fetch(`${API_URL}/approvals/com.alan:autopunish:jar:1.0.0/${action}?adminName=${state.username}`, {
+        const response = await fetch(`${API_URL}/approvals/${sanitizedId}/${action}?adminName=${state.username}`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${state.token}`
@@ -219,14 +228,26 @@ async function handleApproval(id, isApproved) {
         });
 
         if (response.ok) {
-            // Reload approvals
-            loadApprovals();
+            const result = await response.json();
+            if (result.success) {
+                // Reload approvals
+                loadApprovals();
+                alert(`Punishment ${action}d successfully!`);
+            } else {
+                alert(`Failed to ${action} punishment: ${result.error}`);
+            }
         } else {
-            alert(`Failed to ${action} punishment. Please try again.`);
+            const errorText = await response.text();
+            console.error(`Failed to ${action} punishment:`, response.status, errorText);
+            alert(`Failed to ${action} punishment. Server returned status: ${response.status}`);
         }
     } catch (error) {
         console.error(`Error ${action}ing punishment:`, error);
         alert(`Network error while trying to ${action} punishment.`);
+    } finally {
+        // Re-enable button
+        button.disabled = false;
+        button.textContent = originalText;
     }
 }
 

@@ -179,11 +179,14 @@ public class PunishmentQueueManager {
      * Process an approval response
      */
     public boolean processApproval(String approvalId, boolean approved, CommandSender admin) {
-        logger.info("Processing approval for ID: " + approvalId + ", approved: " + approved + ", admin: " + admin.getName());
+        logger.info("Processing approval for ID: '" + approvalId + "' (length: " + approvalId.length() + "), approved: " + approved + ", admin: " + admin.getName());
+
+        // Log all available approval IDs for debugging
+        logger.info("Available approval IDs: " + queuedPunishments.keySet());
 
         QueuedPunishment queued = queuedPunishments.get(approvalId);
         if (queued == null) {
-            logger.warning("No pending punishment found with ID: " + approvalId);
+            logger.warning("No pending punishment found with ID: '" + approvalId + "'");
             // Only send message if admin is a player (not console/web)
             if (admin instanceof Player) {
                 admin.sendMessage("§cNo pending punishment found with ID: " + approvalId);
@@ -241,6 +244,14 @@ public class PunishmentQueueManager {
             // Notify all admins
             notifyAdmins("§6[AutoPunish] §cPunishment for §f" + queued.getPlayerName() +
                     " §cdenied by §f" + admin.getName());
+
+            // Send webhook notification about denial
+            try {
+                plugin.getWebhookManager().sendDeniedPunishmentWebhook(queued, admin.getName());
+                logger.info("Denied punishment webhook notification sent successfully");
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "Failed to send webhook for denied punishment", e);
+            }
 
             // Only send message if admin is a player (not console/web)
             if (admin instanceof Player) {
