@@ -3,6 +3,7 @@ package com.alan.autoPunish.api;
 import com.alan.autoPunish.AutoPunish;
 import com.alan.autoPunish.models.Punishment;
 import com.alan.autoPunish.models.PunishmentRule;
+import com.alan.autoPunish.models.QueuedPunishment;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 
@@ -81,38 +82,92 @@ public class AutoPunishAPI {
      * @return true if successful, false otherwise
      */
     public static boolean punishPlayer(OfflinePlayer player, String rule, String issuer, UUID issuerUuid) {
-        // Create a custom punishment
+        // Get the rule
         PunishmentRule punishmentRule = plugin.getConfigManager().getRule(rule);
         if (punishmentRule == null) {
             return false;
         }
 
-        // Get the tier based on history
-        List<Punishment> history = getPunishmentHistoryForRule(player.getUniqueId(), rule);
-        int tier = history.size() + 1;
+        // Get previous punishments for escalation
+        List<Punishment> ruleHistory = getPunishmentHistoryForRule(player.getUniqueId(), rule);
+        int tier = ruleHistory.size() + 1;
 
         Map<String, String> punishment = punishmentRule.getTier(tier);
         if (punishment == null) {
             return false;
         }
 
-        // Create punishment record
-        Punishment record = new Punishment(
-                player.getUniqueId(),
-                player.getName() != null ? player.getName() : "Unknown",
-                rule,
-                punishment.get("type"),
-                punishment.get("duration"),
-                issuer,
-                issuerUuid
+        // Apply the punishment through the punishment manager
+        return plugin.getPunishmentManager().punishPlayer(
+                plugin.getServer().getConsoleSender(), // Using console as sender
+                player,
+                rule
         );
+    }
 
-        // Save to database
-        plugin.getDatabaseManager().savePunishment(record);
+    /**
+     * Get all queued punishments awaiting approval
+     * @return List of queued punishments
+     */
+    public static List<QueuedPunishment> getQueuedPunishments() {
+        return plugin.getPunishmentQueueManager().getQueuedPunishments();
+    }
 
-        // Send webhook notification
-        plugin.getWebhookManager().sendPunishmentWebhook(record);
+    /**
+     * Get a specific queued punishment by approval ID
+     * @param approvalId The approval ID
+     * @return The queued punishment or null if not found
+     */
+    public static QueuedPunishment getQueuedPunishment(String approvalId) {
+        return plugin.getPunishmentQueueManager().getQueuedPunishment(approvalId);
+    }
 
-        return true;
+    /**
+     * Approve a queued punishment
+     * @param approvalId The approval ID of the punishment
+     * @param approver The player or entity approving the punishment
+     * @return true if successful, false otherwise
+     */
+    public static boolean approvePunishment(String approvalId, Player approver) {
+        return plugin.getPunishmentQueueManager().processApproval(approvalId, true, approver);
+    }
+
+    /**
+     * Deny a queued punishment
+     * @param approvalId The approval ID of the punishment
+     * @param denier The player or entity denying the punishment
+     * @return true if successful, false otherwise
+     */
+    public static boolean denyPunishment(String approvalId, Player denier) {
+        return plugin.getPunishmentQueueManager().processApproval(approvalId, false, denier);
+    }
+
+    /**
+     * Check if a punishment needs admin approval
+     * @param type The punishment type
+     * @param duration The punishment duration
+     * @param sender The command sender
+     * @return true if approval is needed, false otherwise
+     */
+    public static boolean needsApproval(String type, String duration, Player sender) {
+        return plugin.getPunishmentQueueManager().needsApproval(type, duration, sender);
+    }
+
+    /**
+     * Reset a player's punishment history
+     * @param playerUuid The UUID of the player
+     * @return true if successful, false otherwise
+     */
+    public static boolean resetPlayerHistory(UUID playerUuid) {
+        return plugin.getPunishmentQueueManager().resetPlayerHistory(playerUuid);
+    }
+
+    /**
+     * Check if a staff member can bypass punishment approval
+     * @param sender The command sender
+     * @return true if they can bypass, false otherwise
+     */
+    public static boolean canBypassApproval(Player sender) {
+        return plugin.getPunishmentQueueManager().canBypassApproval(sender);
     }
 }
