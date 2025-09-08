@@ -1,6 +1,10 @@
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\api\AutoPunishAPI.java
+C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\api\events\PlayerHistoryResetEvent.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\api\events\PrePunishmentEvent.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\api\events\PunishmentAppliedEvent.java
+C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\api\events\PunishmentApprovedEvent.java
+C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\api\events\PunishmentDeniedEvent.java
+C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\api\events\PunishmentQueuedEvent.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\AutoPunish.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\commands\PunishAdminCommand.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\commands\PunishCommand.java

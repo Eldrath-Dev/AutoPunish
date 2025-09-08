@@ -42,15 +42,17 @@
 
             <div id="approvals" class="tab-content">
                 <h2>Pending Approvals</h2>
-                <div id="approvals-list">
-                    <p>Loading approvals...</p>
+                <div id="approvals-list" class="data-container">
+                    <div class="loading-indicator hidden">Loading approvals...</div>
+                    <p class="no-data hidden">No pending approvals.</p>
                 </div>
             </div>
 
             <div id="punishments" class="tab-content hidden">
                 <h2>Recent Punishments</h2>
-                <div id="punishments-list">
-                    <p>Loading punishments...</p>
+                <div id="punishments-list" class="data-container">
+                    <div class="loading-indicator hidden">Loading punishments...</div>
+                    <p class="no-data hidden">No punishments found.</p>
                 </div>
             </div>
 
@@ -60,7 +62,10 @@
                     <input type="text" id="player-search-input" placeholder="Enter player name">
                     <button type="submit">Search</button>
                 </form>
-                <div id="player-results"></div>
+                <div id="player-results" class="data-container">
+                    <div class="loading-indicator hidden">Loading players...</div>
+                    <p class="no-data hidden">No player data available.</p>
+                </div>
             </div>
         </div>
     </main>

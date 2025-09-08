@@ -2,7 +2,8 @@
 let state = {
     token: localStorage.getItem('token'),
     username: localStorage.getItem('username'),
-    activeTab: 'approvals'
+    activeTab: 'approvals',
+    refreshInterval: null // Variable to hold the interval ID
 };
 
 // DOM elements
@@ -16,9 +17,14 @@ const approvalsList = document.getElementById('approvals-list');
 const punishmentsList = document.getElementById('punishments-list');
 const tabButtons = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
+const approvalLoadingIndicator = approvalsList.querySelector('.loading-indicator');
+const punishmentLoadingIndicator = punishmentsList.querySelector('.loading-indicator');
+const playerResults = document.getElementById('player-results'); // Assuming you might have a player results div
+const playerLoadingIndicator = playerResults.querySelector('.loading-indicator'); // Get the loading indicator for players
 
 // API base URL
 const API_URL = '/api';
+const REFRESH_INTERVAL_MS = 60000; // 1 minute in milliseconds
 
 // Initialize application
 function init() {
@@ -26,6 +32,7 @@ function init() {
     if (state.token && state.username) {
         showDashboard();
         loadData();
+        startAutoRefresh(); // Start auto-refresh when logged in
     } else {
         showLoginForm();
     }
@@ -41,6 +48,9 @@ function init() {
             switchTab(tabName);
         });
     });
+
+    // Player search form submission
+    document.getElementById('player-search').addEventListener('submit', handlePlayerSearch);
 }
 
 // Show login form
@@ -48,6 +58,7 @@ function showLoginForm() {
     loginForm.classList.remove('hidden');
     dashboard.classList.add('hidden');
     userInfo.classList.add('hidden');
+    stopAutoRefresh(); // Ensure refresh is stopped when logging out
 }
 
 // Show dashboard
@@ -112,6 +123,7 @@ async function handleLogin(e) {
             // Show dashboard
             showDashboard();
             loadData();
+            startAutoRefresh(); // Start auto-refresh after successful login
         } else {
             // Show error
             loginError.textContent = data.error || 'Login failed';
@@ -134,6 +146,27 @@ function handleLogout() {
 
     // Show login form
     showLoginForm();
+    stopAutoRefresh(); // Stop auto-refresh on logout
+}
+
+// Start the auto-refresh interval
+function startAutoRefresh() {
+    // Clear any existing interval to prevent duplicates
+    stopAutoRefresh();
+
+    state.refreshInterval = setInterval(() => {
+        console.log("Auto-refreshing data...");
+        loadData(); // Reload data for the current tab
+    }, REFRESH_INTERVAL_MS);
+}
+
+// Stop the auto-refresh interval
+function stopAutoRefresh() {
+    if (state.refreshInterval) {
+        clearInterval(state.refreshInterval);
+        state.refreshInterval = null;
+        console.log("Auto-refresh stopped.");
+    }
 }
 
 // Load data based on active tab
@@ -143,10 +176,21 @@ function loadData() {
     } else if (state.activeTab === 'punishments') {
         loadPunishments();
     }
+    // Add other tabs if needed, e.g., player search
+}
+
+// Helper to show loading indicators and hide no-data messages
+function setLoadingState(listElement, hasData) {
+    const loadingIndicator = listElement.querySelector('.loading-indicator');
+    const noDataMessage = listElement.querySelector('.no-data');
+
+    if (loadingIndicator) loadingIndicator.classList.add('hidden');
+    if (noDataMessage) noDataMessage.classList.toggle('hidden', hasData);
 }
 
 // Load pending approvals
 async function loadApprovals() {
+    setLoadingState(approvalsList, false); // Show loading, hide no-data
     try {
         const response = await fetch(`${API_URL}/approvals`, {
             headers: {
@@ -157,19 +201,23 @@ async function loadApprovals() {
         if (response.ok) {
             const approvals = await response.json();
             renderApprovals(approvals);
+            setLoadingState(approvalsList, approvals.length > 0); // Update loading state based on data
         } else {
             approvalsList.innerHTML = '<p class="error">Failed to load approvals</p>';
+            setLoadingState(approvalsList, false);
         }
     } catch (error) {
         console.error('Error loading approvals:', error);
         approvalsList.innerHTML = '<p class="error">Network error. Please try again.</p>';
+        setLoadingState(approvalsList, false);
     }
 }
 
 // Render approvals list
 function renderApprovals(approvals) {
     if (approvals.length === 0) {
-        approvalsList.innerHTML = '<p>No pending approvals!</p>';
+        approvalsList.innerHTML = '<p class="no-data">No pending approvals!</p>';
+        setLoadingState(approvalsList, false); // Show no-data, hide loading
         return;
     }
 
@@ -177,17 +225,20 @@ function renderApprovals(approvals) {
 
     approvals.forEach(approval => {
         const formattedDate = new Date(approval.queuedDate).toLocaleString();
+        // Ensure approval.approvalId exists before using it
+        const approvalId = approval.approvalId || 'N/A';
+
         html += `
             <div class="approval-card">
-                <h3>Approval ID: ${approval.approvalId}</h3>
+                <h3>Approval ID: ${approvalId}</h3>
                 <p><strong>Player:</strong> ${approval.playerName}</p>
                 <p><strong>Rule:</strong> ${approval.rule}</p>
                 <p><strong>Punishment:</strong> ${approval.type} (${approval.duration === '0' ? 'Permanent' : approval.duration})</p>
                 <p><strong>Requested by:</strong> ${approval.staffName}</p>
                 <p><strong>Date:</strong> ${formattedDate}</p>
                 <div class="approval-actions">
-                    <button class="approve-btn" data-id="${approval.approvalId}">Approve</button>
-                    <button class="deny-btn" data-id="${approval.approvalId}">Deny</button>
+                    <button class="approve-btn" data-id="${approvalId}">Approve</button>
+                    <button class="deny-btn" data-id="${approvalId}">Deny</button>
                 </div>
             </div>
         `;
@@ -195,21 +246,22 @@ function renderApprovals(approvals) {
 
     html += '</div>';
     approvalsList.innerHTML = html;
+    setLoadingState(approvalsList, true); // Indicate data is loaded
 
     // Add event listeners to buttons
     document.querySelectorAll('.approve-btn').forEach(btn => {
-        btn.addEventListener('click', () => handleApproval(btn.getAttribute('data-id'), true));
+        btn.addEventListener('click', (e) => handleApproval(e, btn.getAttribute('data-id'), true));
     });
 
     document.querySelectorAll('.deny-btn').forEach(btn => {
-        btn.addEventListener('click', () => handleApproval(btn.getAttribute('data-id'), false));
+        btn.addEventListener('click', (e) => handleApproval(e, btn.getAttribute('data-id'), false));
     });
 }
 
 // Handle approval or denial
-async function handleApproval(id, isApproved) {
+async function handleApproval(event, id, isApproved) {
     // Sanitize the ID to ensure it's just the approval ID
-    const sanitizedId = id.split('/').pop(); // Get the last part if it's a full path
+    const sanitizedId = id.toString().trim(); // Get the last part if it's a full path and trim whitespace
 
     const action = isApproved ? 'approve' : 'deny';
     const button = event.target;
@@ -220,13 +272,19 @@ async function handleApproval(id, isApproved) {
     button.textContent = 'Processing...';
 
     try {
-        const response = await fetch(`${API_URL}/approvals/${sanitizedId}/${action}?adminName=${state.username}`, {
+        // Encode the approval ID and admin name to handle special characters
+        const encodedId = encodeURIComponent(sanitizedId);
+        const encodedAdminName = encodeURIComponent(state.username);
+
+        const response = await fetch(`${API_URL}/approvals/${encodedId}/${action}?adminName=${encodedAdminName}`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${state.token}`
+                'Authorization': `Bearer ${state.token}`,
+                'Content-Type': 'application/json'
             }
         });
 
+        // Check if response is OK before parsing JSON
         if (response.ok) {
             const result = await response.json();
             if (result.success) {
@@ -237,9 +295,10 @@ async function handleApproval(id, isApproved) {
                 alert(`Failed to ${action} punishment: ${result.error}`);
             }
         } else {
-            const errorText = await response.text();
+            // Try to get more detailed error from response body
+            const errorText = await response.text(); // Use text() for potential non-JSON error messages
             console.error(`Failed to ${action} punishment:`, response.status, errorText);
-            alert(`Failed to ${action} punishment. Server returned status: ${response.status}`);
+            alert(`Failed to ${action} punishment. Server returned status: ${response.status}. Check console for details.`);
         }
     } catch (error) {
         console.error(`Error ${action}ing punishment:`, error);
@@ -253,6 +312,7 @@ async function handleApproval(id, isApproved) {
 
 // Load punishments
 async function loadPunishments() {
+    setLoadingState(punishmentsList, false); // Show loading, hide no-data
     try {
         const response = await fetch(`${API_URL}/punishments?page=1&size=20`, {
             headers: {
@@ -263,19 +323,23 @@ async function loadPunishments() {
         if (response.ok) {
             const data = await response.json();
             renderPunishments(data.punishments);
+            setLoadingState(punishmentsList, data.punishments.length > 0); // Update loading state based on data
         } else {
             punishmentsList.innerHTML = '<p class="error">Failed to load punishments</p>';
+            setLoadingState(punishmentsList, false);
         }
     } catch (error) {
         console.error('Error loading punishments:', error);
         punishmentsList.innerHTML = '<p class="error">Network error. Please try again.</p>';
+        setLoadingState(punishmentsList, false);
     }
 }
 
 // Render punishments list
 function renderPunishments(punishments) {
     if (punishments.length === 0) {
-        punishmentsList.innerHTML = '<p>No punishments found!</p>';
+        punishmentsList.innerHTML = '<p class="no-data">No punishments found!</p>';
+        setLoadingState(punishmentsList, false); // Show no-data, hide loading
         return;
     }
 
@@ -308,6 +372,52 @@ function renderPunishments(punishments) {
 
     html += '</tbody></table>';
     punishmentsList.innerHTML = html;
+    setLoadingState(punishmentsList, true); // Indicate data is loaded
+}
+
+// Handle player search
+async function handlePlayerSearch(e) {
+    e.preventDefault();
+    const playerName = document.getElementById('player-search-input').value;
+    if (!playerName) return;
+
+    // Clear previous results and show loading
+    playerResults.innerHTML = '<div class="loading-indicator">Loading player info...</div>';
+    playerResults.classList.remove('hidden');
+
+    try {
+        // Assuming you have an endpoint like /api/players/{name} or you can search online players
+        // For now, let's simulate a search for online players
+        const onlinePlayers = await fetch(`${API_URL}/players`, {
+            headers: { 'Authorization': `Bearer ${state.token}` }
+        });
+
+        if (onlinePlayers.ok) {
+            const data = await onlinePlayers.json();
+            const foundPlayers = data.players.filter(p => p.name.toLowerCase().includes(playerName.toLowerCase()));
+
+            renderPlayerSearch(foundPlayers);
+        } else {
+            playerResults.innerHTML = '<p class="error">Failed to load players</p>';
+        }
+    } catch (error) {
+        console.error('Player search error:', error);
+        playerResults.innerHTML = '<p class="error">Network error. Please try again.</p>';
+    }
+}
+
+function renderPlayerSearch(players) {
+    if (players.length === 0) {
+        playerResults.innerHTML = '<p class="no-data">Player not found or not online.</p>';
+        return;
+    }
+
+    let html = '<ul>';
+    players.forEach(player => {
+        html += `<li>${player.name} (UUID: ${player.uuid})</li>`; // Placeholder, you'd add more info here
+    });
+    html += '</ul>';
+    playerResults.innerHTML = html;
 }
 
 // Initialize the application
