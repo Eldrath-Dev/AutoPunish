@@ -1,6 +1,6 @@
 # AutoPunish - Advanced Minecraft Punishment System
 
-AutoPunish - Advanced Minecraft Punishment System
+
 ================================================
 
 AutoPunish is a comprehensive punishment management system for Minecraft servers that automatically handles player infractions with a configurable escalation system. This plugin allows server administrators to enforce rules consistently while maintaining detailed logs of all player violations.
