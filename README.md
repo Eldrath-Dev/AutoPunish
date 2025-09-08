@@ -137,7 +137,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 Authors
 -------
-- AlanDev - Initial work - yourusername
+- AlanTheDev - Initial work - AlanTheDev
 - Contributors listed in the GitHub repo
 
 Acknowledgments
