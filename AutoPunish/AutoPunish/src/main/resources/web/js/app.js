@@ -261,7 +261,7 @@ function renderApprovals(approvals) {
 // Handle approval or denial
 async function handleApproval(event, id, isApproved) {
     // Sanitize the ID to ensure it's just the approval ID
-    const sanitizedId = id.toString().split('/').pop().trim(); // Get the last part if it's a full path and trim whitespace
+    const sanitizedId = id.toString().trim(); // Get the last part if it's a full path and trim whitespace
 
     const action = isApproved ? 'approve' : 'deny';
     const button = event.target;

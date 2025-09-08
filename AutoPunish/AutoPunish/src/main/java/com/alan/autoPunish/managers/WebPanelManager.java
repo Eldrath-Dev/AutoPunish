@@ -6,7 +6,6 @@ import com.alan.autoPunish.models.QueuedPunishment;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
-import io.javalin.plugin.bundled.CorsPlugin;
 import org.bukkit.Bukkit;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
@@ -112,7 +111,7 @@ public class WebPanelManager {
         if (auth == null || !auth.startsWith("Bearer ")) {
             ctx.status(401);
             ctx.json(Map.of("error", "Unauthorized"));
-            return; // Use return instead of halt()
+            return;
         }
 
         // Validate the token (simple implementation - should use JWT in production)
@@ -120,16 +119,12 @@ public class WebPanelManager {
         if (!isValidToken(token)) {
             ctx.status(401);
             ctx.json(Map.of("error", "Invalid token"));
-            return; // Use return instead of halt()
+            return;
         }
     }
 
     private boolean isValidToken(String token) {
         // Simple token validation - in a real implementation, use JWT
-        // For this example, we'll use a very simple token: username_timestamp
-        // where timestamp is when the token was issued
-        // A real implementation would use a proper JWT library
-
         return token.equals("autoPunishToken_" + adminUsername);
     }
 
@@ -216,15 +211,17 @@ public class WebPanelManager {
         String adminName = ctx.queryParam("adminName");
         if (adminName == null) adminName = "WebAdmin";
 
-        logger.info("Web panel approve request received for ID: '" + approvalId + "' by admin: " + adminName);
-        // Log the actual approvalId received from the path parameter
+        logger.info("Web panel approve request received for ID: '" + approvalId + "' (length: " + approvalId.length() + ") by admin: " + adminName);
+
+        // Log the path param for debugging
         logger.info("Received approvalId from path param: " + approvalId);
 
         try {
+            // Process the approval directly
             ConsoleCommandSender consoleSender = Bukkit.getConsoleSender();
             boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, true, consoleSender);
 
-            logger.info("PunishmentQueueManager returned success for approve: " + success);
+            logger.info("PunishmentQueueManager returned success: " + success);
 
             if (success) {
                 logger.info("Web panel: Punishment " + approvalId + " approved successfully by " + adminName);
@@ -246,16 +243,17 @@ public class WebPanelManager {
         String adminName = ctx.queryParam("adminName");
         if (adminName == null) adminName = "WebAdmin";
 
-        logger.info("Web panel deny request received for ID: '" + approvalId + "' by admin: " + adminName);
+        logger.info("Web panel deny request received for ID: '" + approvalId + "' (length: " + approvalId.length() + ") by admin: " + adminName);
 
         // Log the path param for debugging
         logger.info("Received approvalId from path param: " + approvalId);
 
         try {
+            // Process the denial directly
             ConsoleCommandSender consoleSender = Bukkit.getConsoleSender();
             boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, false, consoleSender);
 
-            logger.info("PunishmentQueueManager returned success for deny: " + success);
+            logger.info("PunishmentQueueManager returned success: " + success);
 
             if (success) {
                 logger.info("Web panel: Punishment " + approvalId + " denied successfully by " + adminName);
