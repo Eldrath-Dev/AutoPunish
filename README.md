@@ -1,10 +1,5 @@
 # AutoPunish - Advanced Minecraft Punishment System
 
-![Version](https://img.shields.io/github/v/release/Eldrath-Dev/AutoPunish)
-![License](https://img.shields.io/github/license/Eldrath-Dev/AutoPunish)
-![Downloads](https://img.shields.io/github/downloads/Eldrath-Dev/AutoPunish/total)
-![Build](https://img.shields.io/github/actions/workflow/status/Eldrath-Dev/AutoPunish/build.yml?branch=main)
-
 AutoPunish - Advanced Minecraft Punishment System
 ================================================
 
