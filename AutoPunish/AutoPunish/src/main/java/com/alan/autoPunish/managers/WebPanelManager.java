@@ -216,18 +216,15 @@ public class WebPanelManager {
         String adminName = ctx.queryParam("adminName");
         if (adminName == null) adminName = "WebAdmin";
 
-        logger.info("Web panel approve request received for ID: '" + approvalId + "' (length: " + approvalId.length() + ") by admin: " + adminName);
-
-        // Log the raw path param for debugging
-        logger.info("Raw path param map: " + ctx.pathParamMap());
-        logger.info("Path params: " + ctx.pathParamMap().keySet() + " -> " + ctx.pathParamMap().values());
+        logger.info("Web panel approve request received for ID: '" + approvalId + "' by admin: " + adminName);
+        // Log the actual approvalId received from the path parameter
+        logger.info("Received approvalId from path param: " + approvalId);
 
         try {
-            // Process the approval directly
             ConsoleCommandSender consoleSender = Bukkit.getConsoleSender();
             boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, true, consoleSender);
 
-            logger.info("PunishmentQueueManager returned success: " + success);
+            logger.info("PunishmentQueueManager returned success for approve: " + success);
 
             if (success) {
                 logger.info("Web panel: Punishment " + approvalId + " approved successfully by " + adminName);
@@ -249,18 +246,16 @@ public class WebPanelManager {
         String adminName = ctx.queryParam("adminName");
         if (adminName == null) adminName = "WebAdmin";
 
-        logger.info("Web panel deny request received for ID: '" + approvalId + "' (length: " + approvalId.length() + ") by admin: " + adminName);
+        logger.info("Web panel deny request received for ID: '" + approvalId + "' by admin: " + adminName);
 
-        // Log the raw path param for debugging
-        logger.info("Raw path param map: " + ctx.pathParamMap());
-        logger.info("Path params: " + ctx.pathParamMap().keySet() + " -> " + ctx.pathParamMap().values());
+        // Log the path param for debugging
+        logger.info("Received approvalId from path param: " + approvalId);
 
         try {
-            // Process the denial directly
             ConsoleCommandSender consoleSender = Bukkit.getConsoleSender();
             boolean success = plugin.getPunishmentQueueManager().processApproval(approvalId, false, consoleSender);
 
-            logger.info("PunishmentQueueManager returned success: " + success);
+            logger.info("PunishmentQueueManager returned success for deny: " + success);
 
             if (success) {
                 logger.info("Web panel: Punishment " + approvalId + " denied successfully by " + adminName);

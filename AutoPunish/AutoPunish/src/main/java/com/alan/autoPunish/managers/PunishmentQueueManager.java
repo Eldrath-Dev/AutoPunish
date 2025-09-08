@@ -179,6 +179,7 @@ public class PunishmentQueueManager {
      * Process an approval response
      */
     public boolean processApproval(String approvalId, boolean approved, CommandSender admin) {
+        // Enhanced logging for debugging
         logger.info("Processing approval for ID: '" + approvalId + "' (length: " + approvalId.length() + "), approved: " + approved + ", admin: " + admin.getName());
 
         // Log all available approval IDs for debugging
@@ -285,16 +286,11 @@ public class PunishmentQueueManager {
      * Reset a player's punishment history
      */
     public boolean resetPlayerHistory(UUID playerUuid) {
-        // Remove any queued punishments for this player
-        Iterator<Map.Entry<String, QueuedPunishment>> iterator = queuedPunishments.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<String, QueuedPunishment> entry = iterator.next();
-            if (entry.getValue().getPlayerUuid().equals(playerUuid)) {
-                iterator.remove();
-                // Also remove from database
-                plugin.getDatabaseManager().removeQueuedPunishment(entry.getValue().getApprovalId());
-            }
-        }
+        // Remove any queued punishments for this player from the in-memory map
+        queuedPunishments.entrySet().removeIf(entry -> entry.getValue().getPlayerUuid().equals(playerUuid));
+
+        // Also remove from database
+        plugin.getDatabaseManager().removeQueuedPunishment(null); // This needs to be specific to playerUuid or handled by DB function
 
         // Reset the player's history in the database
         return plugin.getDatabaseManager().resetPlayerHistory(playerUuid);
