@@ -2,12 +2,14 @@ package com.alan.autoPunish.managers;
 
 import com.alan.autoPunish.AutoPunish;
 import com.alan.autoPunish.models.Punishment;
+import com.alan.autoPunish.models.PunishmentRule;
 import com.alan.autoPunish.models.QueuedPunishment;
 
 import java.io.File;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -158,6 +160,17 @@ public class DatabaseManager {
                             ");"
             );
 
+            // *** NEW: Create rules table ***
+            statement.execute(
+                    "CREATE TABLE IF NOT EXISTS rules (" +
+                            "rule_name VARCHAR(50) NOT NULL, " +
+                            "tier_index INT NOT NULL, " +
+                            "type VARCHAR(20) NOT NULL, " +
+                            "duration VARCHAR(20) NOT NULL, " +
+                            "PRIMARY KEY (rule_name, tier_index)" +
+                            ");"
+            );
+
             logger.info("Database tables created successfully!");
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to create database tables: " + e.getMessage(), e);
@@ -166,6 +179,76 @@ public class DatabaseManager {
         }
     }
 
+    // *** NEW: Method to synchronize a single rule with the database ***
+    public void syncRule(PunishmentRule rule) {
+        String ruleName = rule.getName();
+        String deleteSql = "DELETE FROM rules WHERE rule_name = ?;";
+        String insertSql = "INSERT INTO rules (rule_name, tier_index, type, duration) VALUES (?, ?, ?, ?);";
+
+        try (Connection conn = this.connection;
+             PreparedStatement deleteStmt = conn.prepareStatement(deleteSql);
+             PreparedStatement insertStmt = conn.prepareStatement(insertSql)) {
+
+            conn.setAutoCommit(false); // Start transaction
+
+            // Delete existing tiers for this rule
+            deleteStmt.setString(1, ruleName);
+            deleteStmt.executeUpdate();
+
+            // Insert new tiers
+            int tierIndex = 0;
+            for (Map<String, String> tier : rule.getPunishmentTiers()) {
+                insertStmt.setString(1, ruleName);
+                insertStmt.setInt(2, tierIndex);
+                insertStmt.setString(3, tier.get("type"));
+                insertStmt.setString(4, tier.get("duration"));
+                insertStmt.addBatch();
+                tierIndex++;
+            }
+            insertStmt.executeBatch();
+
+            conn.commit(); // Commit transaction
+            logger.info("Successfully synchronized rule '" + ruleName + "' with the database.");
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Failed to synchronize rule '" + ruleName + "': " + e.getMessage(), e);
+            try {
+                if (connection != null) connection.rollback();
+            } catch (SQLException ex) {
+                logger.log(Level.SEVERE, "Failed to rollback transaction: " + ex.getMessage(), ex);
+            }
+        }
+    }
+
+    // *** NEW: Method to delete a rule from the database ***
+    public void deleteRule(String ruleName) {
+        String sql = "DELETE FROM rules WHERE rule_name = ?;";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, ruleName);
+            statement.executeUpdate();
+            logger.info("Successfully deleted rule '" + ruleName + "' from the database.");
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Failed to delete rule '" + ruleName + "': " + e.getMessage(), e);
+        }
+    }
+
+    // *** NEW: Method to synchronize all rules from config to database at startup ***
+    public void syncAllRules(Map<String, PunishmentRule> rules) {
+        String clearSql = "DELETE FROM rules;";
+        try (Statement statement = connection.createStatement()) {
+            statement.execute(clearSql);
+            logger.info("Cleared existing rules from database for synchronization.");
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Failed to clear rules table: " + e.getMessage(), e);
+            return;
+        }
+
+        for (PunishmentRule rule : rules.values()) {
+            syncRule(rule);
+        }
+        logger.info("Finished synchronizing all rules with the database.");
+    }
+
+    // --- Existing methods below ---
     public void savePunishment(Punishment punishment) {
         String sql = "INSERT INTO punishments (id, player_uuid, player_name, rule, type, duration, staff_name, staff_uuid, date) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);";
@@ -212,7 +295,6 @@ public class DatabaseManager {
                     punishments.add(punishment);
                 }
             }
-            logger.info("Retrieved " + punishments.size() + " punishments for player UUID " + playerUuid);
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to get punishment history: " + e.getMessage(), e);
             e.printStackTrace();
@@ -244,7 +326,6 @@ public class DatabaseManager {
                     punishments.add(punishment);
                 }
             }
-            logger.info("Retrieved " + punishments.size() + " punishments for player UUID " + playerUuid + " and rule " + rule);
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to get punishment history for rule: " + e.getMessage(), e);
             e.printStackTrace();
@@ -253,7 +334,6 @@ public class DatabaseManager {
         return punishments;
     }
 
-    // New methods for queued punishments
     public void saveQueuedPunishment(QueuedPunishment punishment) {
         String sql = "INSERT INTO queued_punishments (id, player_uuid, player_name, rule, type, duration, " +
                 "staff_name, staff_uuid, queued_date, approval_id) " +
@@ -272,7 +352,6 @@ public class DatabaseManager {
             statement.setString(10, punishment.getApprovalId());
 
             statement.executeUpdate();
-            logger.info("Saved queued punishment for player " + punishment.getPlayerName());
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to save queued punishment: " + e.getMessage(), e);
         }
@@ -284,7 +363,6 @@ public class DatabaseManager {
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, approvalId);
             statement.executeUpdate();
-            logger.info("Removed queued punishment with ID " + approvalId);
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to remove queued punishment: " + e.getMessage(), e);
         }
@@ -322,7 +400,6 @@ public class DatabaseManager {
         return queuedPunishments;
     }
 
-    // New method to reset a player's violation history
     public boolean resetPlayerHistory(UUID playerUuid) {
         try {
             // Delete all punishments for this player
@@ -348,10 +425,6 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * Test database connection and report status
-     * @return true if connection is valid, false otherwise
-     */
     public boolean testConnection() {
         try {
             if (connection == null || connection.isClosed()) {
