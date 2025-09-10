@@ -6,8 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="85e7c090-9dcb-48d1-bbe9-4228ef7a0dfc" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/managers/ConfigManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/managers/ConfigManager.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/managers/DatabaseManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/managers/DatabaseManager.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/AutoPunish.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/AutoPunish.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/commands/RuleManagementCommand.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/commands/RuleManagementCommand.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/models/PunishmentRule.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/models/PunishmentRule.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin.yml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

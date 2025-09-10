@@ -72,6 +72,7 @@ public class AutoPunish extends JavaPlugin {
         getCommand("severity").setExecutor(new SeverityCommand(this));
         getCommand("punishadmin").setExecutor(new PunishAdminCommand(this));
         getCommand("resethistory").setExecutor(new ResetHistoryCommand(this));
+        getCommand("rule").setExecutor(new RuleManagementCommand(this)); // *** NEW ***
 
         // Register tab completers
         getCommand("punish").setTabCompleter(new PunishCommand(this));
@@ -79,6 +80,7 @@ public class AutoPunish extends JavaPlugin {
         getCommand("severity").setTabCompleter(new SeverityCommand(this));
         getCommand("punishadmin").setTabCompleter(new PunishAdminCommand(this));
         getCommand("resethistory").setTabCompleter(new ResetHistoryCommand(this));
+        getCommand("rule").setTabCompleter(new RuleManagementCommand(this)); // *** NEW ***
     }
 
     private void registerListeners() {
