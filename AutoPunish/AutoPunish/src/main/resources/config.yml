@@ -1,0 +1,64 @@
+discord-webhook: "https://discord.com/api/webhooks/1414003674543292549/H7tpcC_fMttwdeH3etJQGnYgCIiPr44N9CtA1VzVkg46hOEsHXhQW_h5QoD_wDEEs7nu"
+
+storage:
+  type: "sqlite"
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "punishments"
+    username: "root"
+    password: "password"
+
+# Admin web panel settings
+web-panel:
+  enabled: true
+  port: 8080
+  username: "admin"
+  password: "changeme123"  # Be sure to change this in production!
+
+# *** NEW: Public punishment directory settings ***
+public-web-panel:
+  enabled: true
+  port: 8081
+
+# Approval system settings
+approval-system:
+  enabled: true
+  # Minimum ban duration that requires approval (in days)
+  require-approval-after: 7
+  # Staff ranks that can bypass approval
+  bypass-approval-permissions:
+    - "autopunish.bypass.approval"
+    - "autopunish.admin.senior"
+  # Notification settings
+  notify-admin-on-auto-approved: true
+
+rules:
+  minor_chat_violations:
+    - type: "warn"
+      duration: "0"
+    - type: "mute"
+      duration: "1h"
+    - type: "mute"
+      duration: "24h"
+    - type: "mute"
+      duration: "3d"
+    - type: "mute"
+      duration: "7d"
+  spam:
+    - type: "warn"
+      duration: "0"
+    - type: "mute"
+      duration: "10m"
+    - type: "mute"
+      duration: "30m"
+    - type: "mute"
+      duration: "2h"
+    - type: "mute"
+      duration: "1d"
+  impersonation:
+    - type: "warn"
+      duration: "0"
+    - type: "mute"
+      duration: "1d"
+    - type: "ban"
