@@ -1,4 +1,3 @@
-discord-webhook: "https://discord.com/api/webhooks/1414003674543292549/H7tpcC_fMttwdeH3etJQGnYgCIiPr44N9CtA1VzVkg46hOEsHXhQW_h5QoD_wDEEs7nu"
 
 storage:
   type: "sqlite"
