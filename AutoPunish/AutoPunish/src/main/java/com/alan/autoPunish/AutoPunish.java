@@ -12,15 +12,13 @@ import java.util.logging.Logger;
 public class AutoPunish extends JavaPlugin {
     private static AutoPunish instance;
     private Logger logger;
-    private FileConfiguration config;
-
     private ConfigManager configManager;
     private DatabaseManager databaseManager;
     private WebhookManager webhookManager;
     private PunishmentQueueManager punishmentQueueManager;
     private PunishmentManager punishmentManager;
     private WebPanelManager webPanelManager;
-    private PublicWebPanelManager publicWebPanelManager; // *** NEW ***
+    private PublicWebPanelManager publicWebPanelManager; // NEW
 
     @Override
     public void onEnable() {
@@ -56,17 +54,15 @@ public class AutoPunish extends JavaPlugin {
             logger.info("Admin Web Panel initialized on port " + getConfig().getInt("web-panel.port", 8080));
         }
 
-        // *** NEW: Start public web panel if enabled ***
+        // Start public web panel if enabled
         if (getConfig().getBoolean("public-web-panel.enabled", true)) {
             this.publicWebPanelManager = new PublicWebPanelManager(this);
             this.publicWebPanelManager.start();
             logger.info("Public Web Panel initialized on port " + getConfig().getInt("public-web-panel.port", 8081));
         }
 
-        // Register commands
+        // Register commands and listeners
         registerCommands();
-
-        // Register listeners
         registerListeners();
 
         logger.info("AutoPunish plugin has been enabled!");
@@ -103,7 +99,7 @@ public class AutoPunish extends JavaPlugin {
             logger.info("Admin Web Panel stopped");
         }
 
-        // *** NEW: Stop public web panel ***
+        // Stop public web panel
         if (publicWebPanelManager != null) {
             publicWebPanelManager.stop();
             logger.info("Public Web Panel stopped");
@@ -117,6 +113,7 @@ public class AutoPunish extends JavaPlugin {
         logger.info("AutoPunish plugin has been disabled!");
     }
 
+    // Getters
     public static AutoPunish getInstance() {
         return instance;
     }
@@ -145,7 +142,6 @@ public class AutoPunish extends JavaPlugin {
         return webPanelManager;
     }
 
-    // *** NEW: Getter for PublicWebPanelManager ***
     public PublicWebPanelManager getPublicWebPanelManager() {
         return publicWebPanelManager;
     }
