@@ -31,11 +31,8 @@ public class DatabaseManager {
         logger.info("Setting up database with storage type: " + storageType);
 
         try {
-            if (storageType.equalsIgnoreCase("mysql")) {
-                setupMysql();
-            } else {
-                setupSqlite(); // defaults to H2
-            }
+            if (storageType.equalsIgnoreCase("mysql")) setupMysql();
+            else setupSqlite();
 
             createTables();
             logger.info("Database connection established successfully!");
@@ -48,8 +45,7 @@ public class DatabaseManager {
         try {
             Class.forName("org.h2.Driver");
         } catch (ClassNotFoundException e) {
-            logger.log(Level.SEVERE, "H2 database driver not found", e);
-            throw new SQLException("H2 database driver not found");
+            throw new SQLException("H2 database driver not found", e);
         }
 
         File dataFolder = plugin.getDataFolder();
@@ -66,11 +62,8 @@ public class DatabaseManager {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
         } catch (ClassNotFoundException e) {
-            try {
-                Class.forName("com.mysql.jdbc.Driver");
-            } catch (ClassNotFoundException e2) {
-                throw new SQLException("MySQL JDBC driver not found");
-            }
+            try { Class.forName("com.mysql.jdbc.Driver"); }
+            catch (ClassNotFoundException e2) { throw new SQLException("MySQL JDBC driver not found"); }
         }
 
         Map<String, String> cfg = configManager.getMysqlConfig();
@@ -148,6 +141,7 @@ public class DatabaseManager {
                 insertStmt.addBatch();
                 tierIndex++;
             }
+
             insertStmt.executeBatch();
             connection.commit();
         } catch (SQLException e) {
@@ -155,6 +149,20 @@ public class DatabaseManager {
             try { connection.rollback(); } catch (SQLException ignored) {}
         } finally {
             try { connection.setAutoCommit(true); } catch (SQLException ignored) {}
+        }
+    }
+
+    public void updateRule(String ruleName, int tierIndex, String type, String duration) {
+        String sql = "REPLACE INTO rules (rule_name, tier_index, type, duration) VALUES (?, ?, ?, ?);";
+        try (PreparedStatement st = connection.prepareStatement(sql)) {
+            st.setString(1, ruleName);
+            st.setInt(2, tierIndex);
+            st.setString(3, type);
+            st.setString(4, duration);
+            st.executeUpdate();
+            logger.info("Updated rule tier " + tierIndex + " for rule " + ruleName);
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Failed to update rule '" + ruleName + "': " + e.getMessage(), e);
         }
     }
 
@@ -180,6 +188,24 @@ public class DatabaseManager {
         logger.info("Synchronized all rules with DB.");
     }
 
+    public Map<String, List<Map<String, String>>> loadRulesFromDb() {
+        Map<String, List<Map<String, String>>> rules = new HashMap<>();
+        String sql = "SELECT * FROM rules ORDER BY rule_name, tier_index;";
+        try (Statement st = connection.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                String ruleName = rs.getString("rule_name");
+                rules.putIfAbsent(ruleName, new ArrayList<>());
+                Map<String, String> tier = new HashMap<>();
+                tier.put("type", rs.getString("type"));
+                tier.put("duration", rs.getString("duration"));
+                rules.get(ruleName).add(tier);
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Failed to load rules from DB", e);
+        }
+        return rules;
+    }
+
     // --- Punishments ---
     public void savePunishment(Punishment p) {
         String sql = "INSERT INTO punishments (id, player_uuid, player_name, rule, type, duration, staff_name, staff_uuid, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);";
@@ -199,42 +225,33 @@ public class DatabaseManager {
         }
     }
 
+    public List<Punishment> getAllPunishments() {
+        return fetchPunishments("SELECT * FROM punishments ORDER BY date DESC;", null);
+    }
+
+    public List<Punishment> getPunishmentsByType(String type) {
+        return fetchPunishments("SELECT * FROM punishments WHERE type = ? ORDER BY date DESC;", type);
+    }
+
     public List<Punishment> getPunishmentHistory(UUID playerUuid) {
-        List<Punishment> list = new ArrayList<>();
-        String sql = "SELECT * FROM punishments WHERE player_uuid = ? ORDER BY date DESC;";
-        try (PreparedStatement st = connection.prepareStatement(sql)) {
-            st.setString(1, playerUuid.toString());
-            try (ResultSet rs = st.executeQuery()) {
-                while (rs.next()) list.add(createPunishmentFromResultSet(rs));
-            }
-        } catch (SQLException e) {
-            logger.log(Level.SEVERE, "Failed to get history for " + playerUuid, e);
-        }
-        return list;
+        return fetchPunishments("SELECT * FROM punishments WHERE player_uuid = ? ORDER BY date DESC;", playerUuid.toString());
     }
 
     public List<Punishment> getPunishmentHistoryForRule(UUID playerUuid, String rule) {
+        return fetchPunishments("SELECT * FROM punishments WHERE player_uuid = ? AND rule = ? ORDER BY date ASC;", playerUuid.toString(), rule);
+    }
+
+    private List<Punishment> fetchPunishments(String sql, String... params) {
         List<Punishment> list = new ArrayList<>();
-        String sql = "SELECT * FROM punishments WHERE player_uuid = ? AND rule = ? ORDER BY date ASC;";
         try (PreparedStatement st = connection.prepareStatement(sql)) {
-            st.setString(1, playerUuid.toString());
-            st.setString(2, rule);
+            if (params != null) {
+                for (int i = 0; i < params.length; i++) st.setString(i + 1, params[i]);
+            }
             try (ResultSet rs = st.executeQuery()) {
                 while (rs.next()) list.add(createPunishmentFromResultSet(rs));
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "Failed to get history for " + rule, e);
-        }
-        return list;
-    }
-
-    public List<Punishment> getAllPunishments() {
-        List<Punishment> list = new ArrayList<>();
-        String sql = "SELECT * FROM punishments ORDER BY date DESC;";
-        try (Statement st = connection.createStatement(); ResultSet rs = st.executeQuery(sql)) {
-            while (rs.next()) list.add(createPunishmentFromResultSet(rs));
-        } catch (SQLException e) {
-            logger.log(Level.SEVERE, "Failed to get all punishments", e);
+            logger.log(Level.SEVERE, "Failed to fetch punishments: " + e.getMessage(), e);
         }
         return list;
     }
@@ -260,8 +277,7 @@ public class DatabaseManager {
     }
 
     public void removeQueuedPunishment(String approvalId) {
-        String sql = "DELETE FROM queued_punishments WHERE approval_id = ?;";
-        try (PreparedStatement st = connection.prepareStatement(sql)) {
+        try (PreparedStatement st = connection.prepareStatement("DELETE FROM queued_punishments WHERE approval_id = ?;")) {
             st.setString(1, approvalId);
             st.executeUpdate();
         } catch (SQLException e) {
@@ -271,8 +287,7 @@ public class DatabaseManager {
 
     public List<QueuedPunishment> getQueuedPunishments() {
         List<QueuedPunishment> list = new ArrayList<>();
-        String sql = "SELECT * FROM queued_punishments;";
-        try (Statement st = connection.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+        try (Statement st = connection.createStatement(); ResultSet rs = st.executeQuery("SELECT * FROM queued_punishments;")) {
             while (rs.next()) list.add(createQueuedPunishmentFromResultSet(rs));
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to fetch queued punishments", e);
@@ -282,15 +297,15 @@ public class DatabaseManager {
 
     // --- Player History Reset ---
     public boolean resetPlayerHistory(UUID playerUuid) {
-        try {
-            try (PreparedStatement st = connection.prepareStatement("DELETE FROM punishments WHERE player_uuid = ?;")) {
-                st.setString(1, playerUuid.toString());
-                st.executeUpdate();
-            }
-            try (PreparedStatement st = connection.prepareStatement("DELETE FROM queued_punishments WHERE player_uuid = ?;")) {
-                st.setString(1, playerUuid.toString());
-                st.executeUpdate();
-            }
+        try (PreparedStatement st1 = connection.prepareStatement("DELETE FROM punishments WHERE player_uuid = ?;");
+             PreparedStatement st2 = connection.prepareStatement("DELETE FROM queued_punishments WHERE player_uuid = ?;")) {
+
+            st1.setString(1, playerUuid.toString());
+            st1.executeUpdate();
+
+            st2.setString(1, playerUuid.toString());
+            st2.executeUpdate();
+
             return true;
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to reset player history", e);

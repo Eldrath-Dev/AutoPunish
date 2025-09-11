@@ -7,8 +7,8 @@
     <list default="true" id="85e7c090-9dcb-48d1-bbe9-4228ef7a0dfc" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/managers/DatabaseManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/managers/DatabaseManager.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/managers/PublicWebPanelManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/managers/PublicWebPanelManager.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/managers/PunishmentManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/managers/PunishmentManager.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/managers/PunishmentQueueManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/managers/PunishmentQueueManager.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
