@@ -11,10 +11,12 @@ C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\ma
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\commands\PunishmentsCommand.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\commands\PunishReloadCommand.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\commands\ResetHistoryCommand.java
+C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\commands\RuleManagementCommand.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\commands\SeverityCommand.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\listeners\ChatListener.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\managers\ConfigManager.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\managers\DatabaseManager.java
+C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\managers\PublicWebPanelManager.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\managers\PunishmentManager.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\managers\PunishmentQueueManager.java
 C:\Users\omcha\OneDrive\Documents\GitHub\AutoPunish\AutoPunish\AutoPunish\src\main\java\com\alan\autoPunish\managers\WebhookManager.java

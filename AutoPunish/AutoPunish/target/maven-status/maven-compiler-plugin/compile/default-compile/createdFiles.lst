@@ -3,11 +3,13 @@ com\alan\autoPunish\api\events\PunishmentQueuedEvent.class
 com\alan\autoPunish\managers\PunishmentQueueManager.class
 com\alan\autoPunish\commands\PunishmentsCommand.class
 com\alan\autoPunish\api\events\PunishmentApprovedEvent.class
+com\alan\autoPunish\commands\RuleManagementCommand.class
 com\alan\autoPunish\commands\PunishAdminCommand.class
 com\alan\autoPunish\models\Punishment.class
 com\alan\autoPunish\utils\ConfigUtils.class
 com\alan\autoPunish\listeners\ChatListener.class
 com\alan\autoPunish\commands\ResetHistoryCommand.class
+com\alan\autoPunish\managers\PublicWebPanelManager.class
 com\alan\autoPunish\managers\WebPanelManager.class
 com\alan\autoPunish\api\events\PlayerHistoryResetEvent.class
 com\alan\autoPunish\managers\PunishmentManager.class
