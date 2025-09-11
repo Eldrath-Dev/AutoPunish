@@ -179,7 +179,8 @@ public class PublicWebPanelManager {
                     "totalMutes", counts.getOrDefault("mute", 0),
                     "totalBans", counts.getOrDefault("ban", 0),
                     "recentPunishments", recent,
-                    "generatedAt", new Date()
+                    "generatedAt", new java.util.Date()
+
             ));
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Error loading punishment stats: " + e.getMessage(), e);

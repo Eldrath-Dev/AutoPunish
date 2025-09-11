@@ -42,11 +42,8 @@ public class DatabaseManager {
     }
 
     private void setupSqlite() throws SQLException {
-        try {
-            Class.forName("org.h2.Driver");
-        } catch (ClassNotFoundException e) {
-            throw new SQLException("H2 database driver not found", e);
-        }
+        try { Class.forName("org.h2.Driver"); }
+        catch (ClassNotFoundException e) { throw new SQLException("H2 database driver not found", e); }
 
         File dataFolder = plugin.getDataFolder();
         if (!dataFolder.exists()) dataFolder.mkdirs();
@@ -59,9 +56,8 @@ public class DatabaseManager {
     }
 
     private void setupMysql() throws SQLException {
-        try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
-        } catch (ClassNotFoundException e) {
+        try { Class.forName("com.mysql.cj.jdbc.Driver"); }
+        catch (ClassNotFoundException e) {
             try { Class.forName("com.mysql.jdbc.Driver"); }
             catch (ClassNotFoundException e2) { throw new SQLException("MySQL JDBC driver not found"); }
         }
@@ -120,6 +116,11 @@ public class DatabaseManager {
         }
     }
 
+    // --- Expose Connection for WebPanel ---
+    public Connection getConnection() {
+        return connection;
+    }
+
     // --- Rule Management ---
     public void syncRule(PunishmentRule rule) {
         String deleteSql = "DELETE FROM rules WHERE rule_name = ?;";
@@ -167,8 +168,7 @@ public class DatabaseManager {
     }
 
     public void deleteRule(String ruleName) {
-        String sql = "DELETE FROM rules WHERE rule_name = ?;";
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (PreparedStatement statement = connection.prepareStatement("DELETE FROM rules WHERE rule_name = ?;")) {
             statement.setString(1, ruleName);
             statement.executeUpdate();
             logger.info("Deleted rule '" + ruleName + "' from DB.");
@@ -190,8 +190,8 @@ public class DatabaseManager {
 
     public Map<String, List<Map<String, String>>> loadRulesFromDb() {
         Map<String, List<Map<String, String>>> rules = new HashMap<>();
-        String sql = "SELECT * FROM rules ORDER BY rule_name, tier_index;";
-        try (Statement st = connection.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+        try (Statement st = connection.createStatement();
+             ResultSet rs = st.executeQuery("SELECT * FROM rules ORDER BY rule_name, tier_index;")) {
             while (rs.next()) {
                 String ruleName = rs.getString("rule_name");
                 rules.putIfAbsent(ruleName, new ArrayList<>());
@@ -225,35 +225,30 @@ public class DatabaseManager {
         }
     }
 
-    public List<Punishment> getAllPunishments() {
-        return fetchPunishments("SELECT * FROM punishments ORDER BY date DESC;", null);
-    }
+    /** --- NEW METHODS --- **/
 
-    public List<Punishment> getPunishmentsByType(String type) {
-        return fetchPunishments("SELECT * FROM punishments WHERE type = ? ORDER BY date DESC;", type);
-    }
-
+    // Get all punishments for a player
     public List<Punishment> getPunishmentHistory(UUID playerUuid) {
         return fetchPunishments("SELECT * FROM punishments WHERE player_uuid = ? ORDER BY date DESC;", playerUuid.toString());
     }
 
+    // Get punishments for a player filtered by rule
     public List<Punishment> getPunishmentHistoryForRule(UUID playerUuid, String rule) {
         return fetchPunishments("SELECT * FROM punishments WHERE player_uuid = ? AND rule = ? ORDER BY date ASC;", playerUuid.toString(), rule);
     }
 
-    private List<Punishment> fetchPunishments(String sql, String... params) {
-        List<Punishment> list = new ArrayList<>();
+    // Helper for executing queries with parameters
+    private List<Punishment> fetchPunishments(String sql, Object... params) {
+        List<Punishment> punishments = new ArrayList<>();
         try (PreparedStatement st = connection.prepareStatement(sql)) {
-            if (params != null) {
-                for (int i = 0; i < params.length; i++) st.setString(i + 1, params[i]);
-            }
+            for (int i = 0; i < params.length; i++) st.setObject(i + 1, params[i]);
             try (ResultSet rs = st.executeQuery()) {
-                while (rs.next()) list.add(createPunishmentFromResultSet(rs));
+                while (rs.next()) punishments.add(createPunishmentFromResultSet(rs));
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "Failed to fetch punishments: " + e.getMessage(), e);
+            logger.log(Level.SEVERE, "Failed to fetch punishments", e);
         }
-        return list;
+        return punishments;
     }
 
     // --- Queued Punishments ---
@@ -315,17 +310,13 @@ public class DatabaseManager {
 
     public void close() {
         if (connection != null) {
-            try {
-                connection.close();
-                logger.info("Database connection closed");
-            } catch (SQLException e) {
-                logger.log(Level.SEVERE, "Error closing DB connection", e);
-            }
+            try { connection.close(); logger.info("Database connection closed"); }
+            catch (SQLException e) { logger.log(Level.SEVERE, "Error closing DB connection", e); }
         }
     }
 
     // --- Helpers ---
-    private Punishment createPunishmentFromResultSet(ResultSet rs) throws SQLException {
+    public Punishment createPunishmentFromResultSet(ResultSet rs) throws SQLException {
         return new Punishment(
                 UUID.fromString(rs.getString("id")),
                 UUID.fromString(rs.getString("player_uuid")),
