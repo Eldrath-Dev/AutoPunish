@@ -1,3 +1,4 @@
+discord-webhook: "https://discord.com/api/webhooks/your-webhook-url"
 
 storage:
   type: "sqlite"
