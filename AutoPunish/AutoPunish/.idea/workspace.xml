@@ -4,7 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="85e7c090-9dcb-48d1-bbe9-4228ef7a0dfc" name="Changes" comment="" />
+    <list default="true" id="85e7c090-9dcb-48d1-bbe9-4228ef7a0dfc" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/src/main/resources/config-example.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/config-example.yml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
