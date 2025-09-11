@@ -44,71 +44,59 @@ public class PunishmentManager {
             return false;
         }
 
-        // Get previous punishments for this specific rule (for history display)
+        // Get punishment history
         List<Punishment> ruleSpecificPunishments =
                 databaseManager.getPunishmentHistoryForRule(target.getUniqueId(), ruleName);
-
-        // Get ALL previous punishments for this player (for punishment determination)
         List<Punishment> allPunishments = databaseManager.getPunishmentHistory(target.getUniqueId());
 
-        // Calculate the total offense count and severity score
         int totalOffenses = allPunishments.size();
         int severityScore = calculateSeverityScore(allPunishments);
 
-        logger.info("Player " + target.getName() + " has " + totalOffenses +
-                " total previous punishments with severity score: " + severityScore);
-        logger.info("For rule " + ruleName + " specifically: " + ruleSpecificPunishments.size() + " previous violations");
+        logger.info("Punishing player " + target.getName() + ": " + totalOffenses + " total offenses, severity " + severityScore);
+        logger.info("For rule " + ruleName + ": " + ruleSpecificPunishments.size() + " prior offenses");
 
-        // Determine the appropriate tier based on overall punishment history
-        // We'll use the maximum of: rule-specific count or general severity-based tier
         int ruleTier = ruleSpecificPunishments.size() + 1;
         int severityTier = Math.min(determineGlobalTier(severityScore), rule.getPunishmentTiers().size());
         int tier = Math.max(ruleTier, severityTier);
 
         Map<String, String> punishment = rule.getTier(tier);
-
         if (punishment == null) {
             sender.sendMessage("§cNo punishment tier defined for offense #" + tier);
-            logger.warning("No punishment tier defined for rule " + ruleName + " at tier " + tier);
+            logger.warning("Missing punishment tier for " + ruleName + " tier " + tier);
             return false;
         }
 
         String type = punishment.get("type");
         String duration = punishment.get("duration");
 
-        logger.info("Selected punishment: Type=" + type + ", Duration=" + duration +
-                " (Based on rule tier: " + ruleTier + ", severity tier: " + severityTier + ")");
+        logger.info("Selected punishment: type=" + type + ", duration=" + duration +
+                " (rule tier=" + ruleTier + ", severity tier=" + severityTier + ")");
 
-        // Check if this punishment needs admin approval - Updated to include sender
+        // Approval check
         PunishmentQueueManager queueManager = plugin.getPunishmentQueueManager();
         if (queueManager != null && queueManager.needsApproval(type, duration, sender)) {
-            // Queue the punishment instead of applying it immediately
             queueManager.queuePunishment(target, ruleName, type, duration, sender, severityScore);
             return true;
         }
 
-        // Fire the PrePunishmentEvent
-        PrePunishmentEvent prePunishmentEvent = null;
+        // PrePunishmentEvent
+        PrePunishmentEvent preEvent = null;
         if (sender instanceof Player) {
-            prePunishmentEvent = new PrePunishmentEvent(target, ruleName, type, duration, (Player) sender);
-            Bukkit.getPluginManager().callEvent(prePunishmentEvent);
+            preEvent = new PrePunishmentEvent(target, ruleName, type, duration, (Player) sender);
+            Bukkit.getPluginManager().callEvent(preEvent);
 
-            // Check if the event was cancelled
-            if (prePunishmentEvent.isCancelled()) {
-                logger.info("Punishment cancelled by another plugin");
+            if (preEvent.isCancelled()) {
+                logger.info("Punishment cancelled by plugin for " + target.getName());
                 return false;
             }
-
-            // Update type and duration in case they were modified by event handlers
-            type = prePunishmentEvent.getType();
-            duration = prePunishmentEvent.getDuration();
+            type = preEvent.getType();
+            duration = preEvent.getDuration();
         }
 
         // Create punishment record
         String staffName = sender instanceof Player ? sender.getName() : "Console";
         UUID staffUuid = sender instanceof Player ? ((Player) sender).getUniqueId() : new UUID(0, 0);
-
-        Punishment punishmentRecord = new Punishment(
+        Punishment record = new Punishment(
                 target.getUniqueId(),
                 target.getName() != null ? target.getName() : "Unknown",
                 ruleName,
@@ -118,248 +106,183 @@ public class PunishmentManager {
                 staffUuid
         );
 
-        // Apply the punishment
+        // Apply punishment
         boolean success = applyPunishment(target, type, duration, ruleName);
-
         if (success) {
-            // Save to database
             try {
-                databaseManager.savePunishment(punishmentRecord);
-                logger.info("Punishment record saved to database successfully");
+                databaseManager.savePunishment(record);
+                logger.info("Punishment saved: " + record);
             } catch (Exception e) {
-                logger.log(Level.SEVERE, "Failed to save punishment to database", e);
+                logger.log(Level.SEVERE, "Failed to save punishment", e);
                 sender.sendMessage("§eWarning: Punishment applied but failed to save to database.");
             }
 
-            // Fire the PunishmentAppliedEvent
-            Bukkit.getPluginManager().callEvent(new PunishmentAppliedEvent(punishmentRecord));
+            Bukkit.getPluginManager().callEvent(new PunishmentAppliedEvent(record));
 
-            // Send webhook notification with enhanced information
             try {
-                webhookManager.sendPunishmentWebhook(punishmentRecord, tier, ruleSpecificPunishments, allPunishments, severityScore);
-                logger.info("Punishment webhook notification sent successfully");
+                webhookManager.sendPunishmentWebhook(record, tier, ruleSpecificPunishments, allPunishments, severityScore);
+                logger.info("Webhook sent for punishment of " + target.getName());
             } catch (Exception e) {
-                logger.log(Level.WARNING, "Failed to send webhook notification", e);
+                logger.log(Level.WARNING, "Failed to send punishment webhook", e);
                 sender.sendMessage("§eWarning: Punishment applied but failed to send Discord notification.");
             }
 
-            // Notify the staff member
-            sender.sendMessage("§aSuccessfully punished " + target.getName() + " for " + ruleName +
-                    " (Punishment: " + type + ", Duration: " +
+            sender.sendMessage("§aPunished " + target.getName() + " for " + ruleName +
+                    " (" + type + ", " +
                     (duration.equals("0") ? "Permanent" : duration) +
                     ", Rule offense #" + ruleTier +
-                    ", Total severity score: " + severityScore + ")");
+                    ", Severity " + severityScore + ")");
         } else {
-            sender.sendMessage("§cFailed to apply punishment to " + target.getName());
+            sender.sendMessage("§cFailed to punish " + target.getName());
         }
 
         return success;
     }
 
-    /**
-     * Execute a punishment that has been approved by an admin
-     */
     public boolean executeApprovedPunishment(OfflinePlayer target, String rule, String type, String duration,
                                              String staffName, UUID staffUuid, String adminName) {
-        // Get previous punishments for this rule to determine the tier
-        List<Punishment> ruleSpecificPunishments =
-                databaseManager.getPunishmentHistoryForRule(target.getUniqueId(), rule);
+        List<Punishment> ruleHistory = databaseManager.getPunishmentHistoryForRule(target.getUniqueId(), rule);
+        List<Punishment> allHistory = databaseManager.getPunishmentHistory(target.getUniqueId());
 
-        // Get ALL previous punishments for severity score
-        List<Punishment> allPunishments = databaseManager.getPunishmentHistory(target.getUniqueId());
+        int tier = ruleHistory.size() + 1;
+        int severityScore = calculateSeverityScore(allHistory);
 
-        // Calculate tier and severity
-        int tier = ruleSpecificPunishments.size() + 1;
-        int severityScore = calculateSeverityScore(allPunishments);
-
-        // Create punishment record
-        Punishment punishmentRecord = new Punishment(
+        Punishment record = new Punishment(
                 target.getUniqueId(),
                 target.getName() != null ? target.getName() : "Unknown",
                 rule,
                 type,
                 duration,
-                staffName + " (Approved by: " + adminName + ")",
+                staffName + " (Approved by " + adminName + ")",
                 staffUuid
         );
 
-        // Apply the punishment
         boolean success = applyPunishment(target, type, duration, rule);
-
         if (success) {
-            // Save to database
             try {
-                databaseManager.savePunishment(punishmentRecord);
-                logger.info("Approved punishment record saved to database successfully");
+                databaseManager.savePunishment(record);
+                logger.info("Approved punishment saved: " + record);
             } catch (Exception e) {
-                logger.log(Level.SEVERE, "Failed to save approved punishment to database", e);
+                logger.log(Level.SEVERE, "Failed to save approved punishment", e);
                 return false;
             }
 
-            // Fire the PunishmentAppliedEvent
-            Bukkit.getPluginManager().callEvent(new PunishmentAppliedEvent(punishmentRecord));
+            Bukkit.getPluginManager().callEvent(new PunishmentAppliedEvent(record));
 
-            // Send webhook notification with tier and history
             try {
-                webhookManager.sendPunishmentWebhook(punishmentRecord, tier, ruleSpecificPunishments, allPunishments, severityScore);
-                logger.info("Approved punishment webhook notification sent successfully");
+                webhookManager.sendPunishmentWebhook(record, tier, ruleHistory, allHistory, severityScore);
+                logger.info("Webhook sent for approved punishment of " + target.getName());
             } catch (Exception e) {
                 logger.log(Level.WARNING, "Failed to send approved punishment webhook", e);
             }
         }
-
         return success;
     }
 
-    /**
-     * Calculate a severity score based on all previous punishments
-     * This helps determine escalation across different rule types
-     */
     public int calculateSeverityScore(List<Punishment> punishments) {
         int score = 0;
         long now = System.currentTimeMillis();
 
         for (Punishment p : punishments) {
-            // Base points by punishment type
-            int typePoints;
+            int points;
             switch (p.getType().toLowerCase()) {
-                case "warn":
-                    typePoints = 1;
-                    break;
+                case "warn": points = 1; break;
                 case "mute":
-                    typePoints = 2;
-                    break;
-                case "kick":
-                    typePoints = 2;
-                    break;
-                case "demotion":
-                    typePoints = 3;
-                    break;
-                case "ban":
-                    // Permanent bans are more severe
-                    typePoints = p.getDuration().equals("0") ? 5 : 3;
-                    break;
-                default:
-                    typePoints = 1;
+                case "kick": points = 2; break;
+                case "demotion": points = 3; break;
+                case "ban": points = p.getDuration().equals("0") ? 5 : 3; break;
+                default: points = 1;
             }
 
-            // Time decay factor - violations get "half as important" after 30 days
-            long ageInDays = (now - p.getDate().getTime()) / (1000 * 60 * 60 * 24);
-            double timeFactor = Math.pow(0.5, ageInDays / 30.0); // Half weight every 30 days
-
-            // Add weighted points to score
-            score += Math.max(1, (int)(typePoints * timeFactor));
+            long age = (now - p.getDate().getTime()) / (1000 * 60 * 60 * 24);
+            double decay = Math.pow(0.5, age / 30.0);
+            score += Math.max(1, (int) (points * decay));
         }
-
         return score;
     }
 
-    /**
-     * Determine global tier based on overall severity score
-     */
     public int determineGlobalTier(int severityScore) {
-        // Simple mapping of severity score to tier
         if (severityScore <= 2) return 1;
         if (severityScore <= 5) return 2;
         if (severityScore <= 10) return 3;
         if (severityScore <= 20) return 4;
-        return 5; // Max tier for very severe violation history
+        return 5;
     }
 
     private boolean applyPunishment(OfflinePlayer target, String type, String duration, String reason) {
         try {
             switch (type.toLowerCase()) {
                 case "warn":
-                    Player onlineTarget = target.getPlayer();
-                    if (onlineTarget != null) {
-                        onlineTarget.sendMessage("§c[Warning] You have been warned for: " + reason);
+                    if (target.isOnline() && target.getPlayer() != null) {
+                        target.getPlayer().sendMessage("§c[Warning] You have been warned for: " + reason);
                     }
-                    logger.info("Warning applied to " + target.getName() + " for " + reason);
+                    logger.info("Warned " + target.getName() + " for " + reason);
                     return true;
 
                 case "mute":
-                    // Assuming you have a permission plugin like LuckPerms
                     if (duration.equals("0")) {
                         Bukkit.dispatchCommand(Bukkit.getConsoleSender(),
                                 "lp user " + target.getName() + " permission set autopunish.muted true");
-                        logger.info("Permanent mute applied to " + target.getName() + " for " + reason);
+                        logger.info("Permanent mute applied to " + target.getName());
                     } else {
                         Bukkit.dispatchCommand(Bukkit.getConsoleSender(),
                                 "lp user " + target.getName() + " permission settemp autopunish.muted true " + duration);
-                        logger.info("Temporary mute (" + duration + ") applied to " + target.getName() + " for " + reason);
+                        logger.info("Temporary mute (" + duration + ") applied to " + target.getName());
                     }
-
-                    // Notify the player if they're online
                     if (target.isOnline() && target.getPlayer() != null) {
-                        String muteMessage = duration.equals("0")
+                        target.getPlayer().sendMessage(duration.equals("0")
                                 ? "§cYou have been permanently muted for: " + reason
-                                : "§cYou have been muted for " + duration + " for: " + reason;
-                        target.getPlayer().sendMessage(muteMessage);
+                                : "§cYou have been muted for " + duration + " for: " + reason);
                     }
                     return true;
 
                 case "ban":
-                    long durationMillis = TimeUtil.parseDuration(duration);
-                    if (durationMillis <= 0) {
-                        // Permanent ban
+                    long millis = TimeUtil.parseDuration(duration);
+                    if (millis <= 0) {
                         Bukkit.getBanList(BanList.Type.NAME).addBan(
                                 target.getName(),
-                                "You have been permanently banned for: " + reason,
+                                "Permanently banned for: " + reason,
                                 null,
                                 null
                         );
-                        logger.info("Permanent ban applied to " + target.getName() + " for " + reason);
+                        logger.info("Permanent ban applied to " + target.getName());
                     } else {
-                        // Temporary ban
-                        Date expiry = new Date(System.currentTimeMillis() + durationMillis);
+                        Date expiry = new Date(System.currentTimeMillis() + millis);
                         Bukkit.getBanList(BanList.Type.NAME).addBan(
                                 target.getName(),
-                                "You have been banned for " + TimeUtil.formatDuration(durationMillis) + " for: " + reason,
+                                "Banned for " + TimeUtil.formatDuration(millis) + " for: " + reason,
                                 expiry,
                                 null
                         );
-                        logger.info("Temporary ban (" + duration + ") applied to " + target.getName() + " for " + reason);
+                        logger.info("Temporary ban (" + duration + ") applied to " + target.getName());
                     }
-
-                    // Kick the player if they're online
                     if (target.isOnline() && target.getPlayer() != null) {
-                        String kickMessage = durationMillis <= 0
+                        target.getPlayer().kickPlayer(millis <= 0
                                 ? "You have been permanently banned for: " + reason
-                                : "You have been banned for " + TimeUtil.formatDuration(durationMillis) + " for: " + reason;
-                        target.getPlayer().kickPlayer(kickMessage);
+                                : "You have been banned for " + TimeUtil.formatDuration(millis) + " for: " + reason);
                     }
                     return true;
 
                 case "kick":
                     if (target.isOnline() && target.getPlayer() != null) {
                         target.getPlayer().kickPlayer("You have been kicked for: " + reason);
-                        logger.info("Kick applied to " + target.getName() + " for " + reason);
+                        logger.info("Kick applied to " + target.getName());
                         return true;
                     }
-                    logger.warning("Failed to kick " + target.getName() + " (player not online)");
+                    logger.warning("Kick failed, " + target.getName() + " not online");
                     return false;
 
                 case "demotion":
-                    // Using LuckPerms for group management
                     if (Bukkit.getPluginManager().isPluginEnabled("LuckPerms")) {
-                        // For this example, we'll implement a basic demotion system
-                        // In a real implementation, you might want to define group hierarchies in config
-
-                        // This is just a demonstration - you would need to implement proper group handling
-                        // based on your server's permission structure
                         Bukkit.dispatchCommand(Bukkit.getConsoleSender(),
                                 "lp user " + target.getName() + " track demote moderation");
-
-                        logger.info("Demotion applied to " + target.getName() + " for " + reason);
-
-                        // Notify the player
+                        logger.info("Demotion applied to " + target.getName());
                         if (target.isOnline() && target.getPlayer() != null) {
                             target.getPlayer().sendMessage("§cYou have been demoted for: " + reason);
                         }
-
                         return true;
                     }
-                    logger.warning("Demotion requires LuckPerms plugin!");
+                    logger.warning("Demotion requires LuckPerms!");
                     return false;
 
                 default:
@@ -368,7 +291,6 @@ public class PunishmentManager {
             }
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Error applying punishment: " + e.getMessage(), e);
-            e.printStackTrace();
             return false;
         }
     }

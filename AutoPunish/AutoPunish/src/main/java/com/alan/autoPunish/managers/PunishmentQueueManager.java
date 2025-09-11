@@ -13,7 +13,7 @@ import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-// Add imports for API events
+// API events
 import com.alan.autoPunish.api.events.PunishmentQueuedEvent;
 import com.alan.autoPunish.api.events.PunishmentApprovedEvent;
 import com.alan.autoPunish.api.events.PunishmentDeniedEvent;
@@ -29,9 +29,7 @@ public class PunishmentQueueManager {
         this.logger = plugin.getLogger();
     }
 
-    /**
-     * Load queued punishments from the database on startup
-     */
+    /** Load queued punishments from the database on startup */
     public void loadQueuedPunishments() {
         List<QueuedPunishment> loaded = plugin.getDatabaseManager().getQueuedPunishments();
         for (QueuedPunishment punishment : loaded) {
@@ -40,101 +38,71 @@ public class PunishmentQueueManager {
         logger.info("Loaded " + loaded.size() + " queued punishments from database");
     }
 
-    /**
-     * Check if a punishment needs admin approval based on severity and staff permissions
-     */
+    /** Ensure a runnable executes on the main thread */
+    private void runSync(Runnable runnable) {
+        if (Bukkit.isPrimaryThread()) {
+            runnable.run();
+        } else {
+            Bukkit.getScheduler().runTask(plugin, runnable);
+        }
+    }
+
+    /** Check if punishment requires approval */
     public boolean needsApproval(String type, String duration, CommandSender sender) {
-        // Skip if approval system is disabled
-        if (!ConfigUtils.isApprovalSystemEnabled()) {
-            return false;
-        }
+        if (!ConfigUtils.isApprovalSystemEnabled()) return false;
+        if (canBypassApproval(sender)) return false;
 
-        // Check if staff member can bypass approval
-        if (canBypassApproval(sender)) {
-            logger.info("Staff member " + sender.getName() + " bypassed punishment approval due to permissions");
-            return false;
-        }
-
-        // Check for severe punishments (ban > configured days or permanent)
         if (type.equalsIgnoreCase("ban")) {
-            // If permanent ban
-            if (duration.equals("0")) {
-                return true;
-            }
+            if (duration.equals("0")) return true; // permanent ban
 
-            // If ban duration > configured days
             long durationMillis = TimeUtil.parseDuration(duration);
             int approvalAfterDays = ConfigUtils.getRequireApprovalAfterDays();
-            if (durationMillis > approvalAfterDays * 24 * 60 * 60 * 1000L) {
-                return true;
-            }
+            return durationMillis > approvalAfterDays * 24L * 60L * 60L * 1000L;
         }
         return false;
     }
 
-    /**
-     * Check if a staff member can bypass punishment approval
-     */
+    /** Check if staff bypass approval */
     public boolean canBypassApproval(CommandSender sender) {
-        if (!(sender instanceof Player)) {
-            // Console can always bypass
-            return true;
-        }
-
-        // Check if the player has any of the bypass permissions
+        if (!(sender instanceof Player)) return true; // console bypass
         for (String permission : ConfigUtils.getBypassApprovalPermissions()) {
-            if (sender.hasPermission(permission)) {
-                return true;
-            }
+            if (sender.hasPermission(permission)) return true;
         }
-
         return false;
     }
 
-    /**
-     * Process a punishment that bypasses approval (auto-approved by staff rank)
-     */
+    /** Auto-approve punishment if staff rank allows it */
     public boolean processAutoApproved(OfflinePlayer target, String rule, String type, String duration,
                                        CommandSender sender, int severityScore) {
         String staffName = sender.getName();
         UUID staffUuid = sender instanceof Player ? ((Player) sender).getUniqueId() : new UUID(0, 0);
 
-        boolean success = plugin.getPunishmentManager().executeApprovedPunishment(
-                target,
-                rule,
-                type,
-                duration,
-                staffName,
-                staffUuid,
-                staffName + " (Auto-approved by rank)"
-        );
+        final boolean[] result = new boolean[1];
+        runSync(() -> {
+            result[0] = plugin.getPunishmentManager().executeApprovedPunishment(
+                    target, rule, type, duration, staffName, staffUuid,
+                    staffName + " (Auto-approved by rank)"
+            );
 
-        if (success) {
-            // Only send message if sender is a player
-            if (sender instanceof Player) {
-                sender.sendMessage("§aYour punishment was auto-approved due to your staff rank.");
+            if (result[0]) {
+                if (sender instanceof Player) {
+                    sender.sendMessage("§aYour punishment was auto-approved due to your staff rank.");
+                }
+                if (ConfigUtils.shouldNotifyAdminOnAutoApproved()) {
+                    notifyAdmins("§6[AutoPunish] §e" + staffName + " issued a " + type +
+                            " (" + (duration.equals("0") ? "Permanent" : duration) + ") to " +
+                            target.getName() + " (auto-approved)");
+                }
+                logger.info("Auto-approved punishment executed: " + type + " " + duration +
+                        " for player " + target.getName() + " by " + staffName);
             }
-
-            // Notify admins if configured
-            if (ConfigUtils.shouldNotifyAdminOnAutoApproved()) {
-                notifyAdmins("§6[AutoPunish] §e" + staffName + " issued a " + type +
-                        " (" + (duration.equals("0") ? "Permanent" : duration) + ") to " +
-                        target.getName() + " (auto-approved by rank)");
-            }
-
-            logger.info("Auto-approved punishment executed: " + type + " " + duration +
-                    " for player " + target.getName() + " by " + staffName);
-        }
-
-        return success;
+        });
+        return result[0];
     }
 
-    /**
-     * Queue a punishment for admin approval
-     */
+    /** Queue punishment for approval */
     public void queuePunishment(OfflinePlayer target, String rule, String type, String duration,
                                 CommandSender sender, int severityScore) {
-        // Check if staff member can bypass approval
         if (canBypassApproval(sender)) {
             processAutoApproved(target, rule, type, duration, sender, severityScore);
             return;
@@ -146,194 +114,131 @@ public class PunishmentQueueManager {
         QueuedPunishment queuedPunishment = new QueuedPunishment(
                 target.getUniqueId(),
                 target.getName() != null ? target.getName() : "Unknown",
-                rule,
-                type,
-                duration,
-                staffName,
-                staffUuid
+                rule, type, duration, staffName, staffUuid
         );
 
-        // Store in our queue
         queuedPunishments.put(queuedPunishment.getApprovalId(), queuedPunishment);
-
-        // Save to database
         plugin.getDatabaseManager().saveQueuedPunishment(queuedPunishment);
 
-        // Send webhook notification about the queued punishment
-        try {
-            plugin.getWebhookManager().sendQueuedPunishmentWebhook(queuedPunishment, severityScore);
-            logger.info("Queued punishment webhook notification sent successfully");
-        } catch (Exception e) {
-            logger.log(Level.WARNING, "Failed to send webhook for queued punishment", e);
-        }
+        // Async webhook
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                plugin.getWebhookManager().sendQueuedPunishmentWebhook(queuedPunishment, severityScore);
+                logger.info("Queued punishment webhook sent");
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "Failed to send webhook for queued punishment", e);
+            }
+        });
 
-        // Fire the PunishmentQueuedEvent
-        Bukkit.getPluginManager().callEvent(new PunishmentQueuedEvent(queuedPunishment, sender, severityScore));
+        runSync(() -> {
+            Bukkit.getPluginManager().callEvent(new PunishmentQueuedEvent(queuedPunishment, sender, severityScore));
+            if (sender instanceof Player) {
+                sender.sendMessage("§eSevere punishment has been queued. Approval ID: §f" +
+                        queuedPunishment.getApprovalId());
+            }
+            notifyAdmins("§6[AutoPunish] §eNew punishment queued: §f" +
+                    queuedPunishment.getPlayerName() + " §e(ID: §f" + queuedPunishment.getApprovalId() + "§e)");
+        });
 
-        // Only send message if sender is a player
-        if (sender instanceof Player) {
-            sender.sendMessage("§eSevere punishment has been queued for admin approval. Approval ID: §f" +
-                    queuedPunishment.getApprovalId());
-        }
-
-        // Notify all online admins
-        notifyAdmins("§6[AutoPunish] §eNew punishment queued for approval: §f" +
-                queuedPunishment.getPlayerName() + " §e(ID: §f" + queuedPunishment.getApprovalId() + "§e)");
-
-        logger.info("Punishment queued for approval: " + type + " " + duration + " for player " +
-                target.getName() + " (Approval ID: " + queuedPunishment.getApprovalId() + ")");
+        logger.info("Queued punishment for approval: " + type + " " + duration + " for " +
+                target.getName() + " (ID: " + queuedPunishment.getApprovalId() + ")");
     }
 
-    /**
-     * Process an approval response
-     */
+    /** Process approval or denial */
     public boolean processApproval(String approvalId, boolean approved, CommandSender admin) {
-        logger.info("Processing approval for ID: '" + approvalId + "' (length: " + approvalId.length() + "), approved: " + approved + ", admin: " + admin.getName());
-
-        // Log all available approval IDs for debugging
-        logger.info("Available approval IDs in memory: " + queuedPunishments.keySet());
-
         QueuedPunishment queued = queuedPunishments.get(approvalId);
         if (queued == null) {
-            logger.warning("No pending punishment found with ID: '" + approvalId + "' in memory");
-            // Only send message if admin is a player (not console/web)
             if (admin instanceof Player) {
-                admin.sendMessage("§cNo pending punishment found with ID: " + approvalId);
+                runSync(() -> admin.sendMessage("§cNo pending punishment found with ID: " + approvalId));
             }
             return false;
         }
 
-        logger.info("Found queued punishment for player: " + queued.getPlayerName() + ", rule: " + queued.getRule());
-
-        PunishmentManager punishmentManager = plugin.getPunishmentManager();
-
         if (approved) {
-            logger.info("Executing approved punishment for player: " + queued.getPlayerName());
-            // Execute the punishment
-            OfflinePlayer target = Bukkit.getOfflinePlayer(queued.getPlayerUuid());
-            boolean success = punishmentManager.executeApprovedPunishment(
-                    target,
-                    queued.getRule(),
-                    queued.getType(),
-                    queued.getDuration(),
-                    queued.getStaffName(),
-                    queued.getStaffUuid(),
-                    admin.getName()
-            );
+            final boolean[] success = new boolean[1];
+            runSync(() -> {
+                OfflinePlayer target = Bukkit.getOfflinePlayer(queued.getPlayerUuid());
+                success[0] = plugin.getPunishmentManager().executeApprovedPunishment(
+                        target, queued.getRule(), queued.getType(), queued.getDuration(),
+                        queued.getStaffName(), queued.getStaffUuid(), admin.getName()
+                );
 
-            if (success) {
-                logger.info("Approved punishment executed successfully for: " + queued.getPlayerName());
-                // Only send message if admin is a player (not console/web)
-                if (admin instanceof Player) {
-                    admin.sendMessage("§aPunishment approved and executed successfully.");
+                if (success[0]) {
+                    if (admin instanceof Player) admin.sendMessage("§aPunishment approved and executed.");
+                    notifyAdmins("§6[AutoPunish] §aPunishment for §f" + queued.getPlayerName() +
+                            " §aapproved by §f" + admin.getName());
+                    Bukkit.getPluginManager().callEvent(new PunishmentApprovedEvent(queued, admin));
+                } else {
+                    if (admin instanceof Player) admin.sendMessage("§cFailed to execute punishment.");
                 }
-                logger.info("Approved punishment executed: " + approvalId);
-
-                // Notify all admins
-                notifyAdmins("§6[AutoPunish] §aPunishment for §f" + queued.getPlayerName() +
-                        " §aapproved by §f" + admin.getName());
-
-                // Fire the PunishmentApprovedEvent
-                Bukkit.getPluginManager().callEvent(new PunishmentApprovedEvent(queued, admin));
-            } else {
-                logger.warning("Failed to execute approved punishment for: " + queued.getPlayerName());
-                // Only send message if admin is a player (not console/web)
-                if (admin instanceof Player) {
-                    admin.sendMessage("§cFailed to execute approved punishment.");
-                }
-                logger.warning("Failed to execute approved punishment: " + approvalId);
-                return false;
-            }
+            });
+            if (!success[0]) return false;
         } else {
-            logger.info("Denying punishment for player: " + queued.getPlayerName());
-            // Notify staff that punishment was denied (only if staff member is online)
-            Player staffMember = Bukkit.getPlayer(queued.getStaffUuid());
-            if (staffMember != null) {
-                staffMember.sendMessage("§cYour punishment request for " + queued.getPlayerName() +
-                        " was denied by admin " + admin.getName());
-            }
+            runSync(() -> {
+                Player staffMember = Bukkit.getPlayer(queued.getStaffUuid());
+                if (staffMember != null) {
+                    staffMember.sendMessage("§cYour punishment request for " + queued.getPlayerName() +
+                            " was denied by " + admin.getName());
+                }
+                notifyAdmins("§6[AutoPunish] §cPunishment for §f" + queued.getPlayerName() +
+                        " §cdenied by §f" + admin.getName());
 
-            // Notify all admins
-            notifyAdmins("§6[AutoPunish] §cPunishment for §f" + queued.getPlayerName() +
-                    " §cdenied by §f" + admin.getName());
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                    try {
+                        plugin.getWebhookManager().sendDeniedPunishmentWebhook(queued, admin.getName());
+                    } catch (Exception e) {
+                        logger.log(Level.WARNING, "Failed to send webhook for denied punishment", e);
+                    }
+                });
 
-            // Send webhook notification about denial
-            try {
-                plugin.getWebhookManager().sendDeniedPunishmentWebhook(queued, admin.getName());
-                logger.info("Denied punishment webhook notification sent successfully");
-            } catch (Exception e) {
-                logger.log(Level.WARNING, "Failed to send webhook for denied punishment", e);
-            }
-
-            // Fire the PunishmentDeniedEvent
-            Bukkit.getPluginManager().callEvent(new PunishmentDeniedEvent(queued, admin));
-
-            // Only send message if admin is a player (not console/web)
-            if (admin instanceof Player) {
-                admin.sendMessage("§cPunishment denied successfully.");
-            }
-            logger.info("Punishment denied by admin " + admin.getName() + ": " + approvalId);
+                Bukkit.getPluginManager().callEvent(new PunishmentDeniedEvent(queued, admin));
+                if (admin instanceof Player) admin.sendMessage("§cPunishment denied.");
+            });
         }
 
-        // Remove from queue
-        queuedPunishments.remove(approvalId);
-        plugin.getDatabaseManager().removeQueuedPunishment(approvalId);
-        logger.info("Removed queued punishment with ID: " + approvalId);
+        runSync(() -> {
+            queuedPunishments.remove(approvalId);
+            plugin.getDatabaseManager().removeQueuedPunishment(approvalId);
+            logger.info("Removed queued punishment ID: " + approvalId);
+        });
         return true;
     }
 
-    /**
-     * Get all queued punishments
-     */
+    /** Get all queued punishments */
     public List<QueuedPunishment> getQueuedPunishments() {
         return new ArrayList<>(queuedPunishments.values());
     }
 
-    /**
-     * Get a queued punishment by ID
-     */
+    /** Get queued punishment by ID */
     public QueuedPunishment getQueuedPunishment(String approvalId) {
         return queuedPunishments.get(approvalId);
     }
 
-    /**
-     * Reset a player's punishment history
-     */
+    /** Reset a player's punishment history */
     public boolean resetPlayerHistory(UUID playerUuid) {
-        // Remove any queued punishments for this player
-        Iterator<Map.Entry<String, QueuedPunishment>> iterator = queuedPunishments.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<String, QueuedPunishment> entry = iterator.next();
+        queuedPunishments.entrySet().removeIf(entry -> {
             if (entry.getValue().getPlayerUuid().equals(playerUuid)) {
-                iterator.remove();
-                // Also remove from database
                 plugin.getDatabaseManager().removeQueuedPunishment(entry.getValue().getApprovalId());
+                return true;
             }
-        }
+            return false;
+        });
 
-        // Get player name for the event
-        String playerName = "Unknown";
-        OfflinePlayer player = Bukkit.getOfflinePlayer(playerUuid);
-        if (player != null && player.getName() != null) {
-            playerName = player.getName();
-        }
-
-        // Fire the PlayerHistoryResetEvent
-        PlayerHistoryResetEvent event = new PlayerHistoryResetEvent(playerUuid, playerName, Bukkit.getConsoleSender());
-        Bukkit.getPluginManager().callEvent(event);
-
-        // Reset the player's history in the database
+        String playerName = Optional.ofNullable(Bukkit.getOfflinePlayer(playerUuid).getName()).orElse("Unknown");
+        runSync(() -> Bukkit.getPluginManager().callEvent(
+                new PlayerHistoryResetEvent(playerUuid, playerName, Bukkit.getConsoleSender())
+        ));
         return plugin.getDatabaseManager().resetPlayerHistory(playerUuid);
     }
 
-    /**
-     * Notify all online admins with a message
-     */
+    /** Notify admins */
     private void notifyAdmins(String message) {
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            if (player.hasPermission("autopunish.admin.approve")) {
-                player.sendMessage(message);
+        runSync(() -> {
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                if (player.hasPermission("autopunish.admin.approve")) {
+                    player.sendMessage(message);
+                }
             }
-        }
+        });
     }
 }
