@@ -20,6 +20,7 @@ public class AutoPunish extends JavaPlugin {
     private PunishmentQueueManager punishmentQueueManager;
     private PunishmentManager punishmentManager;
     private WebPanelManager webPanelManager;
+    private PublicWebPanelManager publicWebPanelManager; // *** NEW ***
 
     @Override
     public void onEnable() {
@@ -48,11 +49,18 @@ public class AutoPunish extends JavaPlugin {
         AutoPunishAPI.init(this);
         logger.info("AutoPunish API initialized successfully!");
 
-        // Start web panel if enabled
+        // Start admin web panel if enabled
         if (getConfig().getBoolean("web-panel.enabled", true)) {
             this.webPanelManager = new WebPanelManager(this);
             this.webPanelManager.start();
-            logger.info("Web panel initialized on port " + getConfig().getInt("web-panel.port", 8080));
+            logger.info("Admin Web Panel initialized on port " + getConfig().getInt("web-panel.port", 8080));
+        }
+
+        // *** NEW: Start public web panel if enabled ***
+        if (getConfig().getBoolean("public-web-panel.enabled", true)) {
+            this.publicWebPanelManager = new PublicWebPanelManager(this);
+            this.publicWebPanelManager.start();
+            logger.info("Public Web Panel initialized on port " + getConfig().getInt("public-web-panel.port", 8081));
         }
 
         // Register commands
@@ -72,7 +80,7 @@ public class AutoPunish extends JavaPlugin {
         getCommand("severity").setExecutor(new SeverityCommand(this));
         getCommand("punishadmin").setExecutor(new PunishAdminCommand(this));
         getCommand("resethistory").setExecutor(new ResetHistoryCommand(this));
-        getCommand("rule").setExecutor(new RuleManagementCommand(this)); // *** NEW ***
+        getCommand("rule").setExecutor(new RuleManagementCommand(this));
 
         // Register tab completers
         getCommand("punish").setTabCompleter(new PunishCommand(this));
@@ -80,7 +88,7 @@ public class AutoPunish extends JavaPlugin {
         getCommand("severity").setTabCompleter(new SeverityCommand(this));
         getCommand("punishadmin").setTabCompleter(new PunishAdminCommand(this));
         getCommand("resethistory").setTabCompleter(new ResetHistoryCommand(this));
-        getCommand("rule").setTabCompleter(new RuleManagementCommand(this)); // *** NEW ***
+        getCommand("rule").setTabCompleter(new RuleManagementCommand(this));
     }
 
     private void registerListeners() {
@@ -89,10 +97,16 @@ public class AutoPunish extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        // Stop web panel
+        // Stop admin web panel
         if (webPanelManager != null) {
             webPanelManager.stop();
-            logger.info("Web panel stopped");
+            logger.info("Admin Web Panel stopped");
+        }
+
+        // *** NEW: Stop public web panel ***
+        if (publicWebPanelManager != null) {
+            publicWebPanelManager.stop();
+            logger.info("Public Web Panel stopped");
         }
 
         // Close database connection
@@ -129,5 +143,10 @@ public class AutoPunish extends JavaPlugin {
 
     public WebPanelManager getWebPanelManager() {
         return webPanelManager;
+    }
+
+    // *** NEW: Getter for PublicWebPanelManager ***
+    public PublicWebPanelManager getPublicWebPanelManager() {
+        return publicWebPanelManager;
     }
 }
