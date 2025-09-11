@@ -9,12 +9,17 @@ storage:
     username: "root"
     password: "password"
 
-# Web panel settings
+# Admin web panel settings
 web-panel:
   enabled: true
   port: 8080
   username: "admin"
   password: "changeme123"  # Be sure to change this in production!
+
+# *** NEW: Public punishment directory settings ***
+public-web-panel:
+  enabled: true
+  port: 8081
 
 # Approval system settings
 approval-system:
@@ -56,41 +61,4 @@ rules:
       duration: "0"
     - type: "mute"
       duration: "1d"
-    - type: "ban"
-      duration: "3d"
-    - type: "ban"
-      duration: "7d"
-    - type: "ban"
-      duration: "30d"
-  advertising:
-    - type: "mute"
-      duration: "1h"
-    - type: "mute"
-      duration: "1d"
-    - type: "ban"
-      duration: "3d"
-    - type: "ban"
-      duration: "30d"
-  hacking:
-    - type: "ban"
-      duration: "30d"
-    - type: "ban"
-      duration: "0"
-  griefing:
-    - type: "warn"
-      duration: "0"
-    - type: "ban"
-      duration: "1d"
-    - type: "ban"
-      duration: "7d"
-    - type: "ban"
-      duration: "30d"
-  harassment:
-    - type: "mute"
-      duration: "1d"
-    - type: "ban"
-      duration: "3d"
-    - type: "ban"
-      duration: "30d"
-    - type: "ban"
-      duration: "0"
+    - type: "ban

@@ -160,7 +160,7 @@ public class DatabaseManager {
                             ");"
             );
 
-            // *** NEW: Create rules table ***
+            // Create rules table
             statement.execute(
                     "CREATE TABLE IF NOT EXISTS rules (" +
                             "rule_name VARCHAR(50) NOT NULL, " +
@@ -179,7 +179,8 @@ public class DatabaseManager {
         }
     }
 
-    // *** NEW: Method to synchronize a single rule with the database ***
+    // --- Rule Management Methods ---
+
     public void syncRule(PunishmentRule rule) {
         String ruleName = rule.getName();
         String deleteSql = "DELETE FROM rules WHERE rule_name = ?;";
@@ -208,7 +209,6 @@ public class DatabaseManager {
             insertStmt.executeBatch();
 
             conn.commit(); // Commit transaction
-            logger.info("Successfully synchronized rule '" + ruleName + "' with the database.");
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to synchronize rule '" + ruleName + "': " + e.getMessage(), e);
             try {
@@ -219,24 +219,20 @@ public class DatabaseManager {
         }
     }
 
-    // *** NEW: Method to delete a rule from the database ***
     public void deleteRule(String ruleName) {
         String sql = "DELETE FROM rules WHERE rule_name = ?;";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, ruleName);
             statement.executeUpdate();
-            logger.info("Successfully deleted rule '" + ruleName + "' from the database.");
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to delete rule '" + ruleName + "': " + e.getMessage(), e);
         }
     }
 
-    // *** NEW: Method to synchronize all rules from config to database at startup ***
     public void syncAllRules(Map<String, PunishmentRule> rules) {
         String clearSql = "DELETE FROM rules;";
         try (Statement statement = connection.createStatement()) {
             statement.execute(clearSql);
-            logger.info("Cleared existing rules from database for synchronization.");
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to clear rules table: " + e.getMessage(), e);
             return;
@@ -245,10 +241,10 @@ public class DatabaseManager {
         for (PunishmentRule rule : rules.values()) {
             syncRule(rule);
         }
-        logger.info("Finished synchronizing all rules with the database.");
     }
 
-    // --- Existing methods below ---
+    // --- Punishment History Methods ---
+
     public void savePunishment(Punishment punishment) {
         String sql = "INSERT INTO punishments (id, player_uuid, player_name, rule, type, duration, staff_name, staff_uuid, date) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);";
@@ -264,11 +260,9 @@ public class DatabaseManager {
             statement.setString(8, punishment.getStaffUuid().toString());
             statement.setTimestamp(9, new Timestamp(punishment.getDate().getTime()));
 
-            int updated = statement.executeUpdate();
-            logger.info("Saved punishment for player " + punishment.getPlayerName() + " (rows affected: " + updated + ")");
+            statement.executeUpdate();
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to save punishment: " + e.getMessage(), e);
-            e.printStackTrace();
         }
     }
 
@@ -281,23 +275,11 @@ public class DatabaseManager {
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    UUID id = UUID.fromString(resultSet.getString("id"));
-                    String playerName = resultSet.getString("player_name");
-                    String rule = resultSet.getString("rule");
-                    String type = resultSet.getString("type");
-                    String duration = resultSet.getString("duration");
-                    String staffName = resultSet.getString("staff_name");
-                    UUID staffUuid = UUID.fromString(resultSet.getString("staff_uuid"));
-                    Timestamp date = resultSet.getTimestamp("date");
-
-                    Punishment punishment = new Punishment(id, playerUuid, playerName, rule, type, duration,
-                            staffName, staffUuid, date);
-                    punishments.add(punishment);
+                    punishments.add(createPunishmentFromResultSet(resultSet));
                 }
             }
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to get punishment history: " + e.getMessage(), e);
-            e.printStackTrace();
         }
 
         return punishments;
@@ -313,26 +295,53 @@ public class DatabaseManager {
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    UUID id = UUID.fromString(resultSet.getString("id"));
-                    String playerName = resultSet.getString("player_name");
-                    String type = resultSet.getString("type");
-                    String duration = resultSet.getString("duration");
-                    String staffName = resultSet.getString("staff_name");
-                    UUID staffUuid = UUID.fromString(resultSet.getString("staff_uuid"));
-                    Timestamp date = resultSet.getTimestamp("date");
-
-                    Punishment punishment = new Punishment(id, playerUuid, playerName, rule, type, duration,
-                            staffName, staffUuid, date);
-                    punishments.add(punishment);
+                    punishments.add(createPunishmentFromResultSet(resultSet));
                 }
             }
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to get punishment history for rule: " + e.getMessage(), e);
-            e.printStackTrace();
         }
 
         return punishments;
     }
+
+    // *** NEW: Method to get all punishments for the public panel ***
+    public List<Punishment> getAllPunishments() {
+        List<Punishment> punishments = new ArrayList<>();
+        String sql = "SELECT * FROM punishments ORDER BY date DESC;";
+
+        try (Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery(sql)) {
+
+            while (resultSet.next()) {
+                punishments.add(createPunishmentFromResultSet(resultSet));
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Failed to get all punishments: " + e.getMessage(), e);
+        }
+        return punishments;
+    }
+
+    // *** NEW: Method to get punishments by a specific type for the public panel ***
+    public List<Punishment> getPunishmentsByType(String type) {
+        List<Punishment> punishments = new ArrayList<>();
+        String sql = "SELECT * FROM punishments WHERE type = ? ORDER BY date DESC;";
+
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, type);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    punishments.add(createPunishmentFromResultSet(resultSet));
+                }
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Failed to get punishments by type '" + type + "': " + e.getMessage(), e);
+        }
+        return punishments;
+    }
+
+    // --- Queued Punishment Methods ---
 
     public void saveQueuedPunishment(QueuedPunishment punishment) {
         String sql = "INSERT INTO queued_punishments (id, player_uuid, player_name, rule, type, duration, " +
@@ -376,22 +385,7 @@ public class DatabaseManager {
              ResultSet resultSet = statement.executeQuery(sql)) {
 
             while (resultSet.next()) {
-                UUID id = UUID.fromString(resultSet.getString("id"));
-                UUID playerUuid = UUID.fromString(resultSet.getString("player_uuid"));
-                String playerName = resultSet.getString("player_name");
-                String rule = resultSet.getString("rule");
-                String type = resultSet.getString("type");
-                String duration = resultSet.getString("duration");
-                String staffName = resultSet.getString("staff_name");
-                UUID staffUuid = UUID.fromString(resultSet.getString("staff_uuid"));
-                Timestamp queuedDate = resultSet.getTimestamp("queued_date");
-                String approvalId = resultSet.getString("approval_id");
-
-                QueuedPunishment punishment = new QueuedPunishment(
-                        id, playerUuid, playerName, rule, type, duration,
-                        staffName, staffUuid, new Date(queuedDate.getTime()), approvalId
-                );
-                queuedPunishments.add(punishment);
+                queuedPunishments.add(createQueuedPunishmentFromResultSet(resultSet));
             }
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to get queued punishments: " + e.getMessage(), e);
@@ -399,6 +393,8 @@ public class DatabaseManager {
 
         return queuedPunishments;
     }
+
+    // --- Utility and Maintenance Methods ---
 
     public boolean resetPlayerHistory(UUID playerUuid) {
         try {
@@ -457,5 +453,37 @@ public class DatabaseManager {
                 e.printStackTrace();
             }
         }
+    }
+
+    // --- Private Helper Methods to reduce code duplication ---
+
+    private Punishment createPunishmentFromResultSet(ResultSet rs) throws SQLException {
+        UUID id = UUID.fromString(rs.getString("id"));
+        UUID playerUuid = UUID.fromString(rs.getString("player_uuid"));
+        String playerName = rs.getString("player_name");
+        String rule = rs.getString("rule");
+        String type = rs.getString("type");
+        String duration = rs.getString("duration");
+        String staffName = rs.getString("staff_name");
+        UUID staffUuid = UUID.fromString(rs.getString("staff_uuid"));
+        Timestamp date = rs.getTimestamp("date");
+
+        return new Punishment(id, playerUuid, playerName, rule, type, duration, staffName, staffUuid, date);
+    }
+
+    private QueuedPunishment createQueuedPunishmentFromResultSet(ResultSet rs) throws SQLException {
+        UUID id = UUID.fromString(rs.getString("id"));
+        UUID playerUuid = UUID.fromString(rs.getString("player_uuid"));
+        String playerName = rs.getString("player_name");
+        String rule = rs.getString("rule");
+        String type = rs.getString("type");
+        String duration = rs.getString("duration");
+        String staffName = rs.getString("staff_name");
+        UUID staffUuid = UUID.fromString(rs.getString("staff_uuid"));
+        Timestamp queuedDate = rs.getTimestamp("queued_date");
+        String approvalId = rs.getString("approval_id");
+
+        return new QueuedPunishment(id, playerUuid, playerName, rule, type, duration,
+                staffName, staffUuid, new Date(queuedDate.getTime()), approvalId);
     }
 }
