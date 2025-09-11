@@ -1,137 +1,134 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const mainContent = document.getElementById('main-content');
-    const navLinks = document.querySelectorAll('.nav-link');
-    const API_URL = '/api/punishments';
-    let refreshInterval;
+  const mainContent = document.getElementById('main-content');
+  const navLinks = document.querySelectorAll('.nav-link');
+  const API_URL = '/api/punishments';
+  let refreshInterval;
 
-    // --- Router Logic ---
-    function navigate() {
-        // Clear any existing refresh interval
-        if (refreshInterval) clearInterval(refreshInterval);
+  // --- Router Logic ---
+  function navigate() {
+    if (refreshInterval) clearInterval(refreshInterval);
 
-        const hash = window.location.hash || '#/';
-        const page = hash.substring(2) || 'home'; // Get page from hash, default to home
+    const hash = window.location.hash || '#/';
+    const page = hash.substring(2) || 'home';
 
-        // Update active nav link
-        navLinks.forEach(link => {
-            link.classList.toggle('active', link.dataset.page === page);
-        });
+    navLinks.forEach(link => {
+      link.classList.toggle('active', link.dataset.page === page);
+    });
 
-        // Load the content for the current page
-        loadPageContent(page);
+    loadPageContent(page);
 
-        // Set up auto-refresh for pages that need it
-        if (['warns', 'mutes', 'bans'].includes(page)) {
-            refreshInterval = setInterval(() => loadPageContent(page), 60000); // Refresh every 60 seconds
-        }
+    if (['warns', 'mutes', 'bans'].includes(page)) {
+      refreshInterval = setInterval(() => loadPageContent(page), 60000);
     }
+  }
 
-    // --- Page Content Loading ---
-    function loadPageContent(page) {
-        mainContent.innerHTML = '<div class="page-content"><p class="loading">Loading...</p></div>';
+  // --- Page Content Loading ---
+  function loadPageContent(page) {
+    mainContent.innerHTML = `
+      <div class="page-content">
+        <p class="loading">Loading...</p>
+      </div>`;
 
-        switch (page) {
-            case 'home':
-                loadHomePage();
-                break;
-            case 'warns':
-                loadPunishmentsPage('warns');
-                break;
-            case 'mutes':
-                loadPunishmentsPage('mutes');
-                break;
-            case 'bans':
-                loadPunishmentsPage('bans');
-                break;
-            default:
-                mainContent.innerHTML = '<div class="page-content"><p class="error">Page not found.</p></div>';
-        }
+    switch (page) {
+      case 'home':
+        loadHomePage();
+        break;
+      case 'warns':
+      case 'mutes':
+      case 'bans':
+        loadPunishmentsPage(page);
+        break;
+      default:
+        mainContent.innerHTML = `
+          <div class="page-content">
+            <p class="error">Page not found.</p>
+          </div>`;
     }
+  }
 
-    function loadHomePage() {
-        const homeHTML = `
-            <div class="page-content">
-                <h2>Welcome to the Punishment Directory</h2>
-                <div class="welcome-text">
-                    <p>This directory provides a public log of all punishments issued on our server. We believe in transparency and accountability for all moderation actions.</p>
-                    <p>Use the navigation links above to view specific types of punishments. The lists are updated automatically.</p>
-                </div>
-            </div>
-        `;
-        mainContent.innerHTML = homeHTML;
+  function loadHomePage() {
+    mainContent.innerHTML = `
+      <div class="page-content">
+        <h2>Welcome to the Punishment Directory</h2>
+        <div class="welcome-text">
+          <p>This directory provides a public log of all punishments issued on our server. We believe in transparency and accountability for all moderation actions.</p>
+          <p>Use the navigation links above to view specific types of punishments. The lists are updated automatically.</p>
+        </div>
+      </div>`;
+  }
+
+  async function loadPunishmentsPage(type) {
+    try {
+      const response = await fetch(`${API_URL}/${type}`);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      renderPunishmentsTable(type, data.punishments);
+    } catch (error) {
+      console.error(`Error fetching ${type}:`, error);
+      mainContent.innerHTML = `
+        <div class="page-content">
+          <p class="error">Could not load ${type}. Please try again later.</p>
+        </div>`;
     }
+  }
 
-    async function loadPunishmentsPage(type) {
-        try {
-            const response = await fetch(`${API_URL}/${type}`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            renderPunishmentsTable(type, data.punishments);
-        } catch (error) {
-            console.error(`Error fetching ${type}:`, error);
-            mainContent.innerHTML = `<div class="page-content"><p class="error">Could not load ${type}. Please try again later.</p></div>`;
-        }
-    }
+  // --- Rendering Logic ---
+  function renderPunishmentsTable(type, punishments) {
+    const typeTitle = type.charAt(0).toUpperCase() + type.slice(1);
+    let tableHTML = `
+      <div class="page-content">
+        <h2>All ${typeTitle}</h2>
+        <div class="table-container">
+          <table class="punishments-table">
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th>Rule</th>
+                <th>Staff</th>
+                <th>Date</th>
+                <th>Duration</th>
+              </tr>
+            </thead>
+            <tbody>`;
 
-    // --- Rendering Logic ---
-    function renderPunishmentsTable(type, punishments) {
-        const typeTitle = type.charAt(0).toUpperCase() + type.slice(1);
-        let tableHTML = `
-            <div class="page-content">
-                <h2>All ${typeTitle}</h2>
-                <div class="table-container">
-                    <table class="punishments-table">
-                        <thead>
-                            <tr>
-                                <th>Player</th>
-                                <th>Rule</th>
-                                <th>Staff</th>
-                                <th>Date</th>
-                                <th>Duration</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-        `;
-
-        if (punishments.length === 0) {
-            tableHTML += `<tr><td colspan="5" style="text-align: center;">No ${type} found.</td></tr>`;
-        } else {
-            punishments.forEach(p => {
-                tableHTML += `
-                    <tr>
-                        <td>${escapeHtml(p.playerName)}</td>
-                        <td>${escapeHtml(p.rule)}</td>
-                        <td>${escapeHtml(p.staffName)}</td>
-                        <td>${new Date(p.date).toLocaleString()}</td>
-                        <td>${p.duration === "0" ? "Permanent" : escapeHtml(p.duration)}</td>
-                    </tr>
-                `;
-            });
-        }
-
+    if (!punishments || punishments.length === 0) {
+      tableHTML += `
+        <tr>
+          <td colspan="5" style="text-align: center;">No ${type} found.</td>
+        </tr>`;
+    } else {
+      punishments.forEach(p => {
         tableHTML += `
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `;
-        mainContent.innerHTML = tableHTML;
+          <tr>
+            <td>${escapeHtml(p.playerName)}</td>
+            <td>${escapeHtml(p.rule)}</td>
+            <td>${escapeHtml(p.staffName)}</td>
+            <td>${new Date(p.date).toLocaleString()}</td>
+            <td>${p.duration === "0" ? "Permanent" : escapeHtml(p.duration)}</td>
+          </tr>`;
+      });
     }
 
-    function escapeHtml(unsafe) {
-        return unsafe
-             .replace(/&/g, "&amp;")
-             .replace(/</g, "&lt;")
-             .replace(/>/g, "&gt;")
-             .replace(/"/g, "&quot;")
-             .replace(/'/g, "&#039;");
-    }
+    tableHTML += `
+            </tbody>
+          </table>
+        </div>
+      </div>`;
 
-    // --- Event Listeners ---
-    window.addEventListener('hashchange', navigate);
+    mainContent.innerHTML = tableHTML;
+  }
 
-    // Initial load
-    navigate();
+  function escapeHtml(unsafe = "") {
+    return String(unsafe)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  // --- Event Listeners ---
+  window.addEventListener('hashchange', navigate);
+  navigate(); // initial load
 });
