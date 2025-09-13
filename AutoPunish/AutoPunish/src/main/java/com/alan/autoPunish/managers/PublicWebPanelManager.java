@@ -2,11 +2,9 @@ package com.alan.autoPunish.managers;
 
 import com.alan.autoPunish.AutoPunish;
 import com.alan.autoPunish.models.Punishment;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
-// import io.javalin.plugin.bundled.CorsPluginConfig; // No longer directly used this way for anyHost
-import java.nio.file.Paths; // Import for Paths.get()
+import io.javalin.http.staticfiles.Location;
 
 import java.sql.*;
 import java.util.*;
@@ -18,14 +16,11 @@ public class PublicWebPanelManager {
     private final Logger logger;
     private final int port;
     private Javalin app;
-    // ObjectMapper is not used in this manager, so it can be removed if not planned for future use
-    // private final ObjectMapper objectMapper;
 
     public PublicWebPanelManager(AutoPunish plugin) {
         this.plugin = plugin;
         this.logger = plugin.getLogger();
         this.port = plugin.getConfig().getInt("public-web-panel.port", 8081);
-        // this.objectMapper = new ObjectMapper(); // Can be removed if not used
     }
 
     public void start() {
@@ -38,17 +33,16 @@ public class PublicWebPanelManager {
             logger.info("Starting public web panel on port " + port);
 
             app = Javalin.create(config -> {
-                // *** FIX for Javalin 6.x CORS configuration ***
-                config.plugins.enableCors(cors -> {
-                    cors.addRule(rule -> {
-                        rule.anyHost(); // Allows all hosts
-                    });
-                });
+                // ✅ FIXED: CORS configuration for Javalin 6.x
+                config.registerPlugin(new io.javalin.plugin.bundled.CorsPlugin(cors -> {
+                    cors.addRule(it -> it.anyHost());
+                }));
 
+                // ✅ FIXED: Static files configuration
                 config.staticFiles.add(staticFiles -> {
-                    // *** FIX for Javalin 6.x: Use Paths.get() ***
-                    staticFiles.directory = String.valueOf(Paths.get("/public-web"));
-                    staticFiles.location = io.javalin.http.staticfiles.Location.CLASSPATH;
+                    staticFiles.hostedPath = "/";
+                    staticFiles.directory = "/public-web";
+                    staticFiles.location = Location.CLASSPATH;
                 });
             });
 
@@ -127,7 +121,7 @@ public class PublicWebPanelManager {
             params.add((page - 1) * size);
 
             // Using try-with-resources for PreparedStatement and ResultSet
-            try (Connection connection = plugin.getDatabaseManager().getConnection(); // Get connection from DatabaseManager
+            try (Connection connection = plugin.getDatabaseManager().getConnection();
                  PreparedStatement stmt = connection.prepareStatement(sql.toString());
                  PreparedStatement countStmt = connection.prepareStatement(countSql.toString())) {
 
@@ -141,7 +135,7 @@ public class PublicWebPanelManager {
                 try (ResultSet rsCount = countStmt.executeQuery()) {
                     if (rsCount.next()) total = rsCount.getInt("total");
                 }
-            } // Connection is closed automatically
+            }
 
             ctx.json(Map.of(
                     "punishments", punishments,
@@ -175,13 +169,13 @@ public class PublicWebPanelManager {
             Map<String, Integer> counts = new HashMap<>();
             int recent = 0;
 
-            try (Connection connection = plugin.getDatabaseManager().getConnection(); // Get connection from DatabaseManager
+            try (Connection connection = plugin.getDatabaseManager().getConnection();
                  PreparedStatement stmt = connection.prepareStatement(sql);
                  ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) counts.put(rs.getString("type").toLowerCase(), rs.getInt("count"));
             }
 
-            try (Connection connection = plugin.getDatabaseManager().getConnection(); // Get connection from DatabaseManager
+            try (Connection connection = plugin.getDatabaseManager().getConnection();
                  PreparedStatement stmt = connection.prepareStatement(recentSql)) {
                 stmt.setTimestamp(1, new Timestamp(System.currentTimeMillis() - 24 * 60 * 60 * 1000));
                 try (ResultSet rs = stmt.executeQuery()) {
@@ -196,7 +190,6 @@ public class PublicWebPanelManager {
                     "totalBans", counts.getOrDefault("ban", 0),
                     "recentPunishments", recent,
                     "generatedAt", new java.util.Date()
-
             ));
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Error loading punishment stats: " + e.getMessage(), e);
