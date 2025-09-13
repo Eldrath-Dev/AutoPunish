@@ -9,18 +9,6 @@
       <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/AutoPunish.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/AutoPunish.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/managers/PublicWebPanelManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/managers/PublicWebPanelManager.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/managers/WebPanelManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/alan/autoPunish/managers/WebPanelManager.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/autopunish-2.0.0.jar" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/alan/autoPunish/AutoPunish.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/alan/autoPunish/AutoPunish.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/alan/autoPunish/api/AutoPunishAPI.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/alan/autoPunish/api/AutoPunishAPI.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/alan/autoPunish/managers/ConfigManager.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/alan/autoPunish/managers/ConfigManager.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/alan/autoPunish/managers/DatabaseManager.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/alan/autoPunish/managers/DatabaseManager.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/alan/autoPunish/managers/PublicWebPanelManager.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/alan/autoPunish/managers/PublicWebPanelManager.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/alan/autoPunish/managers/PunishmentManager.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/alan/autoPunish/managers/PunishmentManager.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/alan/autoPunish/managers/PunishmentQueueManager.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/alan/autoPunish/managers/PunishmentQueueManager.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/alan/autoPunish/managers/WebPanelManager.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/alan/autoPunish/managers/WebPanelManager.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/config-example.yml" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/config-example.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/original-autopunish-2.0.0.jar" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

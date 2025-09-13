@@ -19,7 +19,6 @@ public class AutoPunish extends JavaPlugin {
     private WebhookManager webhookManager;
     private PunishmentQueueManager punishmentQueueManager;
     private PunishmentManager punishmentManager;
-    private WebPanelManager webPanelManager;
     private PublicWebPanelManager publicWebPanelManager;
 
     @Override
@@ -54,12 +53,7 @@ public class AutoPunish extends JavaPlugin {
         AutoPunishAPI.init(this);
         logger.info("AutoPunish API initialized successfully!");
 
-        // Start admin web panel if enabled
-        if (getConfig().getBoolean("web-panel.enabled", true)) {
-            this.webPanelManager = new WebPanelManager(this);
-            this.webPanelManager.start();
-            logger.info("Admin Web Panel initialized on port " + getConfig().getInt("web-panel.port", 8080));
-        }
+
 
         // Start public web panel if enabled
         if (getConfig().getBoolean("public-web-panel.enabled", true)) {
@@ -102,11 +96,6 @@ public class AutoPunish extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        // Stop web panels
-        if (webPanelManager != null) {
-            webPanelManager.stop();
-            logger.info("Admin Web Panel stopped");
-        }
         if (publicWebPanelManager != null) {
             publicWebPanelManager.stop();
             logger.info("Public Web Panel stopped");
@@ -145,9 +134,7 @@ public class AutoPunish extends JavaPlugin {
         return punishmentQueueManager;
     }
 
-    public WebPanelManager getWebPanelManager() {
-        return webPanelManager;
-    }
+
 
     public PublicWebPanelManager getPublicWebPanelManager() {
         return publicWebPanelManager;
