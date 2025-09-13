@@ -143,7 +143,7 @@ public class PublicWebPanelManager {
             params.add(size);
             params.add((page - 1) * size);
 
-            // Using try-with-resources for PreparedStatement and ResultSet
+            // FIXED: Proper connection handling with try-with-resources
             try (Connection connection = plugin.getDatabaseManager().getConnection();
                  PreparedStatement stmt = connection.prepareStatement(sql.toString());
                  PreparedStatement countStmt = connection.prepareStatement(countSql.toString())) {
@@ -563,3 +563,4 @@ public class PublicWebPanelManager {
         }
     }
 }
+

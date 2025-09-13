@@ -599,7 +599,7 @@ public class DatabaseManager {
             byte[] hashedPassword = md.digest(password.getBytes());
 
             return Arrays.equals(hash, hashedPassword);
-        } catch (Exception e) {
+        } catch (NoSuchAlgorithmException e) {
             logger.log(Level.SEVERE, "Failed to verify password", e);
             return false;
         }
@@ -655,3 +655,4 @@ public class DatabaseManager {
         );
     }
 }
+
