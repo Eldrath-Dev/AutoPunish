@@ -4,7 +4,7 @@ import com.alan.autoPunish.AutoPunish;
 import com.alan.autoPunish.models.Punishment;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
-import io.javalin.plugin.bundled.CorsPluginConfig;
+import java.nio.file.Paths; // Import for Paths.get()
 
 import java.sql.*;
 import java.util.*;
@@ -33,9 +33,16 @@ public class PublicWebPanelManager {
             logger.info("Starting public web panel on port " + port);
 
             app = Javalin.create(config -> {
-                config.plugins.enableCors(cors -> cors.add(CorsPluginConfig::anyHost));
+                // *** FIX for Javalin 6.x CORS configuration ***
+                config.plugins.enableCors(cors -> {
+                    cors.addRule(rule -> {
+                        rule.anyHost(); // Allows all hosts
+                    });
+                });
+
                 config.staticFiles.add(staticFiles -> {
-                    staticFiles.directory = "/public-web";
+                    // *** FIX for Javalin 6.x: Use Paths.get() ***
+                    staticFiles.directory = Paths.get("/public-web");
                     staticFiles.location = io.javalin.http.staticfiles.Location.CLASSPATH;
                 });
             });
@@ -114,8 +121,9 @@ public class PublicWebPanelManager {
             params.add(size);
             params.add((page - 1) * size);
 
-            try (PreparedStatement stmt = plugin.getDatabaseManager().getConnection().prepareStatement(sql.toString());
-                 PreparedStatement countStmt = plugin.getDatabaseManager().getConnection().prepareStatement(countSql.toString())) {
+            try (Connection connection = plugin.getDatabaseManager().getConnection();
+                 PreparedStatement stmt = connection.prepareStatement(sql.toString());
+                 PreparedStatement countStmt = connection.prepareStatement(countSql.toString())) {
 
                 for (int i = 0; i < params.size(); i++) stmt.setObject(i + 1, params.get(i));
                 for (int i = 0; i < countParams.size(); i++) countStmt.setObject(i + 1, countParams.get(i));
@@ -161,12 +169,14 @@ public class PublicWebPanelManager {
             Map<String, Integer> counts = new HashMap<>();
             int recent = 0;
 
-            try (PreparedStatement stmt = plugin.getDatabaseManager().getConnection().prepareStatement(sql);
+            try (Connection connection = plugin.getDatabaseManager().getConnection();
+                 PreparedStatement stmt = connection.prepareStatement(sql);
                  ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) counts.put(rs.getString("type").toLowerCase(), rs.getInt("count"));
             }
 
-            try (PreparedStatement stmt = plugin.getDatabaseManager().getConnection().prepareStatement(recentSql)) {
+            try (Connection connection = plugin.getDatabaseManager().getConnection();
+                 PreparedStatement stmt = connection.prepareStatement(recentSql)) {
                 stmt.setTimestamp(1, new Timestamp(System.currentTimeMillis() - 24 * 60 * 60 * 1000));
                 try (ResultSet rs = stmt.executeQuery()) {
                     if (rs.next()) recent = rs.getInt("recent");

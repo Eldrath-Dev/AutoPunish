@@ -7,6 +7,7 @@ import com.alan.autoPunish.managers.*;
 import com.alan.autoPunish.utils.ConfigUtils;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.Objects;
 import java.util.logging.Logger;
 
 public class AutoPunish extends JavaPlugin {
@@ -54,7 +55,7 @@ public class AutoPunish extends JavaPlugin {
         logger.info("AutoPunish API initialized successfully!");
 
         // Start admin web panel if enabled
-        if (configManager.getRules() != null && getConfig().getBoolean("web-panel.enabled", true)) {
+        if (getConfig().getBoolean("web-panel.enabled", true)) {
             this.webPanelManager = new WebPanelManager(this);
             this.webPanelManager.start();
             logger.info("Admin Web Panel initialized on port " + getConfig().getInt("web-panel.port", 8080));
@@ -75,23 +76,24 @@ public class AutoPunish extends JavaPlugin {
     }
 
     private void registerCommands() {
-        // Register command executors and tab completers
-        registerCommand("punish", new PunishCommand(this));
-        registerCommand("punishments", new PunishmentsCommand(this));
-        registerCommand("punishreload", new PunishReloadCommand(this));
-        registerCommand("severity", new SeverityCommand(this));
-        registerCommand("punishadmin", new PunishAdminCommand(this));
-        registerCommand("resethistory", new ResetHistoryCommand(this));
-        registerCommand("rule", new RuleManagementCommand(this));
-    }
+        // Register command executors
+        Objects.requireNonNull(getCommand("punish")).setExecutor(new PunishCommand(this));
+        Objects.requireNonNull(getCommand("punishments")).setExecutor(new PunishmentsCommand(this));
+        Objects.requireNonNull(getCommand("punishreload")).setExecutor(new PunishReloadCommand(this));
+        Objects.requireNonNull(getCommand("severity")).setExecutor(new SeverityCommand(this));
+        Objects.requireNonNull(getCommand("punishadmin")).setExecutor(new PunishAdminCommand(this));
+        Objects.requireNonNull(getCommand("resethistory")).setExecutor(new ResetHistoryCommand(this));
+        Objects.requireNonNull(getCommand("rule")).setExecutor(new RuleManagementCommand(this));
 
-    private void registerCommand(String name, org.bukkit.command.CommandExecutor executor) {
-        if (getCommand(name) != null) {
-            getCommand(name).setExecutor(executor);
-            getCommand(name).setTabCompleter((org.bukkit.command.TabCompleter) executor);
-        } else {
-            logger.warning("Command '" + name + "' not defined in plugin.yml!");
-        }
+        // Register tab completers for commands that support them
+        Objects.requireNonNull(getCommand("punish")).setTabCompleter(new PunishCommand(this));
+        Objects.requireNonNull(getCommand("punishments")).setTabCompleter(new PunishmentsCommand(this));
+        Objects.requireNonNull(getCommand("severity")).setTabCompleter(new SeverityCommand(this));
+        Objects.requireNonNull(getCommand("punishadmin")).setTabCompleter(new PunishAdminCommand(this));
+        Objects.requireNonNull(getCommand("resethistory")).setTabCompleter(new ResetHistoryCommand(this));
+        Objects.requireNonNull(getCommand("rule")).setTabCompleter(new RuleManagementCommand(this));
+
+        // IMPORTANT: The "punishreload" command does not have a tab completer, so we do not register one.
     }
 
     private void registerListeners() {
