@@ -39,20 +39,28 @@ document.addEventListener('DOMContentLoaded', () => {
       existingAuthLinks.forEach(link => link.remove());
 
       if (isLoggedIn) {
-        // Add Staff Chat and Logout links
+        // Add Staff Chat, Team Management, and Logout links
         const chatLink = document.createElement('a');
         chatLink.href = '#/staff-chat';
         chatLink.className = 'nav-link';
         chatLink.dataset.page = 'staff-chat';
         chatLink.dataset.auth = 'true';
-        chatLink.innerHTML = '<i class="fas fa-comments"></i> Staff Chat';
+        chatLink.innerHTML = '<i class="fas fa-comments"></i> <span>Staff Chat</span>';
         nav.appendChild(chatLink);
+
+        const teamLink = document.createElement('a');
+        teamLink.href = '#/team-management';
+        teamLink.className = 'nav-link';
+        teamLink.dataset.page = 'team-management';
+        teamLink.dataset.auth = 'true';
+        teamLink.innerHTML = '<i class="fas fa-users-cog"></i> <span>Team Management</span>';
+        nav.appendChild(teamLink);
 
         const logoutLink = document.createElement('a');
         logoutLink.href = '#';
         logoutLink.className = 'nav-link';
         logoutLink.dataset.auth = 'true';
-        logoutLink.innerHTML = '<i class="fas fa-sign-out-alt"></i> Logout';
+        logoutLink.innerHTML = '<i class="fas fa-sign-out-alt"></i> <span>Logout</span>';
         logoutLink.onclick = (e) => {
           e.preventDefault();
           logout();
@@ -65,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loginLink.className = 'nav-link';
         loginLink.dataset.page = 'login';
         loginLink.dataset.auth = 'true';
-        loginLink.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login';
+        loginLink.innerHTML = '<i class="fas fa-sign-in-alt"></i> <span>Login</span>';
         nav.appendChild(loginLink);
       }
 
@@ -150,6 +158,9 @@ document.addEventListener('DOMContentLoaded', () => {
         break;
       case 'staff-chat':
         loadStaffChatPage();
+        break;
+      case 'team-management':
+        loadTeamManagementPage();
         break;
       default:
         mainContent.innerHTML = `
@@ -359,6 +370,171 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (error) {
       console.error('Error loading chat:', error);
+    }
+  }
+
+  // --- Team Management Page ---
+  function loadTeamManagementPage() {
+    if (!currentUser) {
+      window.location.hash = '#/login';
+      return;
+    }
+
+    mainContent.innerHTML = `
+      <div class="page-content">
+        <h2><i class="fas fa-users-cog"></i> Team Management</h2>
+        <div class="team-management-container">
+          <div class="add-staff-section">
+            <h3><i class="fas fa-user-plus"></i> Add New Staff Member</h3>
+            <form id="add-staff-form" class="add-staff-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="new-username"><i class="fas fa-user"></i> Username</label>
+                  <input type="text" id="new-username" name="username" required>
+                </div>
+                <div class="form-group">
+                  <label for="new-password"><i class="fas fa-lock"></i> Password</label>
+                  <input type="password" id="new-password" name="password" required>
+                </div>
+                <div class="form-group">
+                  <label for="new-role"><i class="fas fa-user-tag"></i> Role</label>
+                  <select id="new-role" name="role">
+                    <option value="staff">Staff</option>
+                    <option value="admin">Admin</option>
+                    <option value="owner">Owner</option>
+                  </select>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary">
+                <i class="fas fa-user-plus"></i> Add Staff Member
+              </button>
+              <div id="add-staff-message" class="form-message"></div>
+            </form>
+          </div>
+
+          <div class="staff-list-section">
+            <h3><i class="fas fa-users"></i> Current Staff Members</h3>
+            <div id="staff-list-container">
+              <p class="loading"><i class="fas fa-spinner fa-spin"></i> Loading staff members...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Load staff list
+    loadStaffList();
+
+    // Handle form submission
+    document.getElementById('add-staff-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('new-username').value;
+      const password = document.getElementById('new-password').value;
+      const role = document.getElementById('new-role').value;
+      const messageEl = document.getElementById('add-staff-message');
+
+      try {
+        const response = await fetch('/api/staff/users', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ username, password, role })
+        });
+
+        const data = await response.json();
+        if (response.ok && data.success) {
+          messageEl.innerHTML = `<p class="success"><i class="fas fa-check-circle"></i> ${data.message}</p>`;
+          // Reset form
+          document.getElementById('add-staff-form').reset();
+          // Reload staff list
+          loadStaffList();
+          showMessage('Staff member added successfully', 'success');
+        } else {
+          messageEl.innerHTML = `<p class="error"><i class="fas fa-exclamation-circle"></i> ${data.error || 'Failed to add staff member'}</p>`;
+        }
+      } catch (error) {
+        messageEl.innerHTML = `<p class="error"><i class="fas fa-exclamation-circle"></i> Failed to add staff member: ${error.message}</p>`;
+      }
+    });
+  }
+
+  async function loadStaffList() {
+    try {
+      const response = await fetch('/api/staff/users');
+      if (response.ok) {
+        const data = await response.json();
+        const container = document.getElementById('staff-list-container');
+
+        if (data.users && data.users.length > 0) {
+          container.innerHTML = `
+            <div class="staff-list">
+              ${data.users.map(user => `
+                <div class="staff-member-card">
+                  <div class="staff-member-info">
+                    <div class="staff-member-name">
+                      <i class="fas fa-user"></i> ${escapeHtml(user.username)}
+                    </div>
+                    <div class="staff-member-role">
+                      <i class="fas fa-user-tag"></i> ${escapeHtml(user.role)}
+                    </div>
+                    <div class="staff-member-uuid">
+                      <i class="fas fa-id-card"></i> ${user.uuid ? escapeHtml(user.uuid) : 'N/A'}
+                    </div>
+                  </div>
+                  ${user.username !== currentUser.username ? `
+                    <div class="staff-member-actions">
+                      <button class="btn btn-small btn-outline delete-staff-btn" data-username="${user.username}">
+                        <i class="fas fa-trash"></i> Delete
+                      </button>
+                    </div>
+                  ` : `
+                    <div class="staff-member-actions">
+                      <span class="current-user">(You)</span>
+                    </div>
+                  `}
+                </div>
+              `).join('')}
+            </div>
+          `;
+
+          // Attach delete event listeners
+          document.querySelectorAll('.delete-staff-btn').forEach(button => {
+            button.addEventListener('click', function() {
+              const username = this.dataset.username;
+              deleteStaffMember(username);
+            });
+          });
+        } else {
+          container.innerHTML = '<p class="no-results"><i class="fas fa-users"></i> No staff members found.</p>';
+        }
+      }
+    } catch (error) {
+      console.error('Error loading staff list:', error);
+      document.getElementById('staff-list-container').innerHTML =
+        '<p class="error"><i class="fas fa-exclamation-triangle"></i> Failed to load staff members.</p>';
+    }
+  }
+
+  async function deleteStaffMember(username) {
+    if (!confirm(`Are you sure you want to delete staff member "${username}"?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/staff/users/${username}`, {
+        method: 'DELETE'
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        showMessage('Staff member deleted successfully', 'success');
+        loadStaffList(); // Reload the list
+      } else {
+        showMessage(data.error || 'Failed to delete staff member', 'error');
+      }
+    } catch (error) {
+      showMessage('Failed to delete staff member: ' + error.message, 'error');
     }
   }
 

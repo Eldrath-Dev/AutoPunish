@@ -85,6 +85,11 @@ public class PublicWebPanelManager {
         app.post("/api/auth/logout", this::logout);
         app.get("/api/auth/session", this::getSessionStatus);
 
+        // NEW: Team management endpoints
+        app.post("/api/staff/users", this::createStaffUser);
+        app.get("/api/staff/users", this::getAllStaffUsers);
+        app.delete("/api/staff/users/{username}", this::deleteStaffUser);
+
         app.error(404, ctx -> ctx.json(Map.of("error", "Not found")));
     }
 
@@ -394,6 +399,104 @@ public class PublicWebPanelManager {
             logger.log(Level.SEVERE, "Error checking session status: " + e.getMessage(), e);
             ctx.status(500);
             ctx.json(Map.of("error", "Failed to check session status: " + e.getMessage()));
+        }
+    }
+
+    // NEW: Create staff user (team management)
+    private void createStaffUser(Context ctx) {
+        try {
+            // Check authentication
+            if (!isAuthenticated(ctx)) {
+                ctx.status(401);
+                ctx.json(Map.of("error", "Unauthorized"));
+                return;
+            }
+
+            Map<String, Object> requestBody = ctx.bodyAsClass(Map.class);
+            String username = (String) requestBody.get("username");
+            String password = (String) requestBody.get("password");
+            String role = (String) requestBody.get("role");
+
+            if (username == null || password == null) {
+                ctx.status(400);
+                ctx.json(Map.of("error", "Username and password are required"));
+                return;
+            }
+
+            // Check if user already exists
+            if (plugin.getDatabaseManager().isStaffUser(username)) {
+                ctx.status(409);
+                ctx.json(Map.of("error", "Username already exists"));
+                return;
+            }
+
+            boolean success = plugin.getDatabaseManager().createStaffUser(username, password, "console", role != null ? role : "staff");
+
+            if (success) {
+                ctx.json(Map.of("success", true, "message", "Staff user created successfully"));
+            } else {
+                ctx.status(500);
+                ctx.json(Map.of("error", "Failed to create staff user"));
+            }
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error creating staff user: " + e.getMessage(), e);
+            ctx.status(500);
+            ctx.json(Map.of("error", "Failed to create staff user: " + e.getMessage()));
+        }
+    }
+
+    // NEW: Get all staff users
+    private void getAllStaffUsers(Context ctx) {
+        try {
+            // Check authentication
+            if (!isAuthenticated(ctx)) {
+                ctx.status(401);
+                ctx.json(Map.of("error", "Unauthorized"));
+                return;
+            }
+
+            List<Map<String, Object>> users = plugin.getDatabaseManager().getAllStaffUsers();
+            ctx.json(Map.of("users", users));
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error fetching staff users: " + e.getMessage(), e);
+            ctx.status(500);
+            ctx.json(Map.of("error", "Failed to fetch staff users: " + e.getMessage()));
+        }
+    }
+
+    // NEW: Delete staff user
+    private void deleteStaffUser(Context ctx) {
+        try {
+            // Check authentication
+            if (!isAuthenticated(ctx)) {
+                ctx.status(401);
+                ctx.json(Map.of("error", "Unauthorized"));
+                return;
+            }
+
+            String username = ctx.pathParam("username");
+
+            // Prevent deleting yourself
+            String sessionId = getSessionId(ctx);
+            Map<String, Object> session = sessions.get(sessionId);
+            if (session != null && username.equals(session.get("username"))) {
+                ctx.status(400);
+                ctx.json(Map.of("error", "You cannot delete your own account"));
+                return;
+            }
+
+            boolean success = plugin.getDatabaseManager().deleteStaffUser(username);
+
+            if (success) {
+                ctx.json(Map.of("success", true, "message", "Staff user deleted successfully"));
+            } else {
+                ctx.status(404);
+                ctx.json(Map.of("error", "Staff user not found"));
+            }
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error deleting staff user: " + e.getMessage(), e);
+            ctx.status(500);
+            ctx.json(Map.of("error", "Failed to delete staff user: " + e.getMessage()));
         }
     }
 
