@@ -17,6 +17,9 @@ public class PublicWebPanelManager {
     private final int port;
     private Javalin app;
 
+    // Simple session storage (in production, use proper session management)
+    private final Map<String, Map<String, Object>> sessions = new HashMap<>();
+
     public PublicWebPanelManager(AutoPunish plugin) {
         this.plugin = plugin;
         this.logger = plugin.getLogger();
@@ -60,12 +63,27 @@ public class PublicWebPanelManager {
     private void setupRoutes() {
         app.get("/", ctx -> ctx.redirect("/index.html"));
 
-        // Consolidated endpoints with optional filtering
+        // Public endpoints
         app.get("/api/punishments", ctx -> getPunishments(ctx, null));
         app.get("/api/punishments/warns", ctx -> getPunishments(ctx, "warn"));
         app.get("/api/punishments/mutes", ctx -> getPunishments(ctx, "mute"));
         app.get("/api/punishments/bans", ctx -> getPunishments(ctx, "ban"));
         app.get("/api/punishments/stats", this::getPunishmentStats);
+
+        // NEW: Get specific punishment (with evidence link)
+        app.get("/api/punishments/{id}", this::getPunishmentById);
+
+        // NEW: Evidence link endpoints
+        app.put("/api/punishments/{id}/evidence", this::updateEvidenceLink);
+
+        // NEW: Staff chat endpoints
+        app.get("/api/staff/chat", this::getChatMessages);
+        app.post("/api/staff/chat", this::postChatMessage);
+
+        // NEW: Authentication endpoints
+        app.post("/api/auth/login", this::login);
+        app.post("/api/auth/logout", this::logout);
+        app.get("/api/auth/session", this::getSessionStatus);
 
         app.error(404, ctx -> ctx.json(Map.of("error", "Not found")));
     }
@@ -79,7 +97,7 @@ public class PublicWebPanelManager {
             String playerFilter = ctx.queryParam("player");
             String ruleFilter = ctx.queryParam("rule");
 
-            List<Punishment> punishments = new ArrayList<>();
+            List<Map<String, Object>> punishments = new ArrayList<>();
             int total = 0;
 
             // Build SQL dynamically
@@ -129,7 +147,20 @@ public class PublicWebPanelManager {
                 for (int i = 0; i < countParams.size(); i++) countStmt.setObject(i + 1, countParams.get(i));
 
                 try (ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) punishments.add(plugin.getDatabaseManager().createPunishmentFromResultSet(rs));
+                    while (rs.next()) {
+                        Map<String, Object> punishment = new HashMap<>();
+                        punishment.put("id", rs.getString("id"));
+                        punishment.put("player_uuid", rs.getString("player_uuid"));
+                        punishment.put("player_name", rs.getString("player_name"));
+                        punishment.put("rule", rs.getString("rule"));
+                        punishment.put("type", rs.getString("type"));
+                        punishment.put("duration", rs.getString("duration"));
+                        punishment.put("staff_name", rs.getString("staff_name"));
+                        punishment.put("staff_uuid", rs.getString("staff_uuid"));
+                        punishment.put("date", rs.getTimestamp("date"));
+                        punishment.put("evidence_link", rs.getString("evidence_link"));
+                        punishments.add(punishment);
+                    }
                 }
 
                 try (ResultSet rsCount = countStmt.executeQuery()) {
@@ -149,6 +180,220 @@ public class PublicWebPanelManager {
             logger.log(Level.SEVERE, "Error loading public punishments" + (type != null ? " [" + type + "]" : "") + ": " + e.getMessage(), e);
             ctx.status(500);
             ctx.json(Map.of("error", "Failed to load punishments" + (type != null ? " [" + type + "]" : "") + ": " + e.getMessage()));
+        }
+    }
+
+    // NEW: Get specific punishment by ID
+    private void getPunishmentById(Context ctx) {
+        try {
+            String id = ctx.pathParam("id");
+
+            try (Connection connection = plugin.getDatabaseManager().getConnection();
+                 PreparedStatement stmt = connection.prepareStatement("SELECT * FROM punishments WHERE id = ?")) {
+
+                stmt.setString(1, id);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        Map<String, Object> punishment = new HashMap<>();
+                        punishment.put("id", rs.getString("id"));
+                        punishment.put("player_uuid", rs.getString("player_uuid"));
+                        punishment.put("player_name", rs.getString("player_name"));
+                        punishment.put("rule", rs.getString("rule"));
+                        punishment.put("type", rs.getString("type"));
+                        punishment.put("duration", rs.getString("duration"));
+                        punishment.put("staff_name", rs.getString("staff_name"));
+                        punishment.put("staff_uuid", rs.getString("staff_uuid"));
+                        punishment.put("date", rs.getTimestamp("date"));
+                        punishment.put("evidence_link", rs.getString("evidence_link"));
+
+                        ctx.json(punishment);
+                    } else {
+                        ctx.status(404);
+                        ctx.json(Map.of("error", "Punishment not found"));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error loading punishment by ID: " + e.getMessage(), e);
+            ctx.status(500);
+            ctx.json(Map.of("error", "Failed to load punishment: " + e.getMessage()));
+        }
+    }
+
+    // NEW: Update evidence link for a punishment
+    private void updateEvidenceLink(Context ctx) {
+        try {
+            // Check authentication
+            if (!isAuthenticated(ctx)) {
+                ctx.status(401);
+                ctx.json(Map.of("error", "Unauthorized"));
+                return;
+            }
+
+            String id = ctx.pathParam("id");
+            Map<String, Object> requestBody = ctx.bodyAsClass(Map.class);
+            String evidenceLink = (String) requestBody.get("evidence_link");
+
+            if (evidenceLink == null || evidenceLink.trim().isEmpty()) {
+                ctx.status(400);
+                ctx.json(Map.of("error", "Evidence link is required"));
+                return;
+            }
+
+            boolean success = plugin.getDatabaseManager().updateEvidenceLink(id, evidenceLink);
+
+            if (success) {
+                ctx.json(Map.of("success", true, "message", "Evidence link updated successfully"));
+            } else {
+                ctx.status(500);
+                ctx.json(Map.of("error", "Failed to update evidence link"));
+            }
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error updating evidence link: " + e.getMessage(), e);
+            ctx.status(500);
+            ctx.json(Map.of("error", "Failed to update evidence link: " + e.getMessage()));
+        }
+    }
+
+    // NEW: Get chat messages
+    private void getChatMessages(Context ctx) {
+        try {
+            // Check authentication
+            if (!isAuthenticated(ctx)) {
+                ctx.status(401);
+                ctx.json(Map.of("error", "Unauthorized"));
+                return;
+            }
+
+            int limit = ctx.queryParamAsClass("limit", Integer.class).getOrDefault(50);
+            List<Map<String, Object>> messages = plugin.getDatabaseManager().getChatMessages(limit);
+            ctx.json(Map.of("messages", messages));
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error loading chat messages: " + e.getMessage(), e);
+            ctx.status(500);
+            ctx.json(Map.of("error", "Failed to load chat messages: " + e.getMessage()));
+        }
+    }
+
+    // NEW: Post chat message
+    private void postChatMessage(Context ctx) {
+        try {
+            // Check authentication
+            if (!isAuthenticated(ctx)) {
+                ctx.status(401);
+                ctx.json(Map.of("error", "Unauthorized"));
+                return;
+            }
+
+            Map<String, Object> requestBody = ctx.bodyAsClass(Map.class);
+            String message = (String) requestBody.get("message");
+
+            if (message == null || message.trim().isEmpty()) {
+                ctx.status(400);
+                ctx.json(Map.of("error", "Message is required"));
+                return;
+            }
+
+            // Get staff info from session
+            String sessionId = getSessionId(ctx);
+            Map<String, Object> session = sessions.get(sessionId);
+            String staffName = (String) session.get("username");
+            String staffUuid = (String) session.get("uuid");
+
+            boolean success = plugin.getDatabaseManager().saveChatMessage(staffName, staffUuid, message);
+
+            if (success) {
+                ctx.json(Map.of("success", true, "message", "Message sent successfully"));
+            } else {
+                ctx.status(500);
+                ctx.json(Map.of("error", "Failed to send message"));
+            }
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error sending chat message: " + e.getMessage(), e);
+            ctx.status(500);
+            ctx.json(Map.of("error", "Failed to send message: " + e.getMessage()));
+        }
+    }
+
+    // NEW: Login endpoint
+    private void login(Context ctx) {
+        try {
+            Map<String, Object> requestBody = ctx.bodyAsClass(Map.class);
+            String username = (String) requestBody.get("username");
+            String password = (String) requestBody.get("password");
+
+            if (username == null || password == null) {
+                ctx.status(400);
+                ctx.json(Map.of("error", "Username and password are required"));
+                return;
+            }
+
+            Map<String, Object> user = plugin.getDatabaseManager().authenticateStaffUser(username, password);
+
+            if (user != null) {
+                // Create session
+                String sessionId = UUID.randomUUID().toString();
+                sessions.put(sessionId, user);
+
+                // Set cookie
+                ctx.cookie("session_id", sessionId, 3600); // 1 hour
+
+                ctx.json(Map.of(
+                        "success", true,
+                        "message", "Login successful",
+                        "user", Map.of(
+                                "username", user.get("username"),
+                                "role", user.get("role")
+                        )
+                ));
+            } else {
+                ctx.status(401);
+                ctx.json(Map.of("error", "Invalid username or password"));
+            }
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error during login: " + e.getMessage(), e);
+            ctx.status(500);
+            ctx.json(Map.of("error", "Login failed: " + e.getMessage()));
+        }
+    }
+
+    // NEW: Logout endpoint
+    private void logout(Context ctx) {
+        try {
+            String sessionId = getSessionId(ctx);
+            if (sessionId != null) {
+                sessions.remove(sessionId);
+                ctx.removeCookie("session_id");
+            }
+            ctx.json(Map.of("success", true, "message", "Logged out successfully"));
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error during logout: " + e.getMessage(), e);
+            ctx.status(500);
+            ctx.json(Map.of("error", "Logout failed: " + e.getMessage()));
+        }
+    }
+
+    // NEW: Get session status
+    private void getSessionStatus(Context ctx) {
+        try {
+            String sessionId = getSessionId(ctx);
+            if (sessionId != null && sessions.containsKey(sessionId)) {
+                Map<String, Object> session = sessions.get(sessionId);
+                ctx.json(Map.of(
+                        "authenticated", true,
+                        "user", Map.of(
+                                "username", session.get("username"),
+                                "role", session.get("role")
+                        )
+                ));
+            } else {
+                ctx.json(Map.of("authenticated", false));
+            }
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error checking session status: " + e.getMessage(), e);
+            ctx.status(500);
+            ctx.json(Map.of("error", "Failed to check session status: " + e.getMessage()));
         }
     }
 
@@ -196,6 +441,16 @@ public class PublicWebPanelManager {
             ctx.status(500);
             ctx.json(Map.of("error", "Failed to load stats: " + e.getMessage()));
         }
+    }
+
+    // Helper methods for authentication
+    private boolean isAuthenticated(Context ctx) {
+        String sessionId = getSessionId(ctx);
+        return sessionId != null && sessions.containsKey(sessionId);
+    }
+
+    private String getSessionId(Context ctx) {
+        return ctx.cookie("session_id");
     }
 
     public void stop() {
