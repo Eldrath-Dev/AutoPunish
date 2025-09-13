@@ -5,17 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Public Punishment Directory</title>
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
 <div id="app">
     <header>
-        <h1>Public Punishment Directory</h1>
-        <nav>
-            <a href="#/" class="nav-link active" data-page="home">Home</a>
-            <a href="#/warns" class="nav-link" data-page="warns">Warns</a>
-            <a href="#/mutes" class="nav-link" data-page="mutes">Mutes</a>
-            <a href="#/bans" class="nav-link" data-page="bans">Bans</a>
-        </nav>
+        <div class="header-content">
+            <h1><i class="fas fa-gavel"></i> Punishment Directory</h1>
+            <nav>
+                <a href="#/" class="nav-link active" data-page="home">
+                    <i class="fas fa-home"></i> Home
+                </a>
+                <a href="#/warns" class="nav-link" data-page="warns">
+                    <i class="fas fa-exclamation-triangle"></i> Warns
+                </a>
+                <a href="#/mutes" class="nav-link" data-page="mutes">
+                    <i class="fas fa-volume-mute"></i> Mutes
+                </a>
+                <a href="#/bans" class="nav-link" data-page="bans">
+                    <i class="fas fa-ban"></i> Bans
+                </a>
+            </nav>
+        </div>
     </header>
 
     <main id="main-content">
@@ -23,7 +34,10 @@
     </main>
 
     <footer>
-        <p>AutoPunish Public Directory &copy; 2025</p>
+        <div class="footer-content">
+            <p>&copy; 2025 AutoPunish Public Directory</p>
+            <p class="footer-stats">Server Moderation Transparency</p>
+        </div>
     </footer>
 </div>
 

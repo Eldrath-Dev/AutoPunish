@@ -6,7 +6,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Router Logic ---
   function navigate() {
-    if (refreshInterval) clearInterval(refreshInterval);
+    if (refreshInterval) {
+      clearInterval(refreshInterval);
+      refreshInterval = null;
+    }
 
     const hash = window.location.hash || '#/';
     const page = hash.substring(2) || 'home';
@@ -60,15 +63,22 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadPunishmentsPage(type) {
     try {
       const response = await fetch(`${API_URL}/${type}`);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
       const data = await response.json();
-      renderPunishmentsTable(type, data.punishments);
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      renderPunishmentsTable(type, data.punishments || []);
     } catch (error) {
       console.error(`Error fetching ${type}:`, error);
       mainContent.innerHTML = `
         <div class="page-content">
           <p class="error">Could not load ${type}. Please try again later.</p>
+          <p class="error-details">Error: ${error.message}</p>
         </div>`;
     }
   }
@@ -78,7 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const typeTitle = type.charAt(0).toUpperCase() + type.slice(1);
     let tableHTML = `
       <div class="page-content">
-        <h2>All ${typeTitle}</h2>
+        <h2>All ${escapeHtml(typeTitle)}</h2>
         <div class="table-container">
           <table class="punishments-table">
             <thead>
@@ -99,13 +109,19 @@ document.addEventListener('DOMContentLoaded', () => {
         </tr>`;
     } else {
       punishments.forEach(p => {
+        const playerName = p.playerName || 'Unknown';
+        const rule = p.rule || 'Unknown';
+        const staffName = p.staffName || 'Unknown';
+        const date = p.date ? new Date(p.date).toLocaleString() : 'Unknown';
+        const duration = p.duration === "0" ? "Permanent" : (p.duration || 'Unknown');
+
         tableHTML += `
           <tr>
-            <td>${escapeHtml(p.playerName)}</td>
-            <td>${escapeHtml(p.rule)}</td>
-            <td>${escapeHtml(p.staffName)}</td>
-            <td>${new Date(p.date).toLocaleString()}</td>
-            <td>${p.duration === "0" ? "Permanent" : escapeHtml(p.duration)}</td>
+            <td>${escapeHtml(playerName)}</td>
+            <td>${escapeHtml(rule)}</td>
+            <td>${escapeHtml(staffName)}</td>
+            <td>${escapeHtml(date)}</td>
+            <td>${escapeHtml(duration)}</td>
           </tr>`;
       });
     }
@@ -120,6 +136,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function escapeHtml(unsafe = "") {
+    if (unsafe === null || unsafe === undefined) {
+      return "";
+    }
     return String(unsafe)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")

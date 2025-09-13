@@ -10,7 +10,6 @@ com\alan\autoPunish\utils\ConfigUtils.class
 com\alan\autoPunish\listeners\ChatListener.class
 com\alan\autoPunish\commands\ResetHistoryCommand.class
 com\alan\autoPunish\managers\PublicWebPanelManager.class
-com\alan\autoPunish\managers\WebPanelManager.class
 com\alan\autoPunish\api\events\PlayerHistoryResetEvent.class
 com\alan\autoPunish\managers\PunishmentManager.class
 com\alan\autoPunish\api\events\PrePunishmentEvent.class

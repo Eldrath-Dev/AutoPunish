@@ -275,7 +275,10 @@ public class PunishmentManager {
     }
 
     private boolean applyDemotion(OfflinePlayer target, String reason) {
-        if (!Bukkit.getPluginManager().isPluginEnabled("LuckPerms")) return false;
+        if (!Bukkit.getPluginManager().isPluginEnabled("LuckPerms")) {
+            logger.warning("LuckPerms not found - cannot apply demotion");
+            return false;
+        }
         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user " + target.getName() + " track demote moderation");
         if (target.isOnline()) target.getPlayer().sendMessage("§cDemoted: " + reason);
         return true;

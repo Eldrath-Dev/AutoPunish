@@ -32,8 +32,10 @@ public class PunishmentQueueManager {
     /** Load queued punishments from the database on startup */
     public void loadQueuedPunishments() {
         List<QueuedPunishment> loaded = plugin.getDatabaseManager().getQueuedPunishments();
-        for (QueuedPunishment punishment : loaded) {
-            queuedPunishments.put(punishment.getApprovalId(), punishment);
+        synchronized(queuedPunishments) {
+            for (QueuedPunishment punishment : loaded) {
+                queuedPunishments.put(punishment.getApprovalId(), punishment);
+            }
         }
         logger.info("Loaded " + loaded.size() + " queued punishments from database");
     }
@@ -117,7 +119,9 @@ public class PunishmentQueueManager {
                 rule, type, duration, staffName, staffUuid
         );
 
-        queuedPunishments.put(queuedPunishment.getApprovalId(), queuedPunishment);
+        synchronized(queuedPunishments) {
+            queuedPunishments.put(queuedPunishment.getApprovalId(), queuedPunishment);
+        }
         plugin.getDatabaseManager().saveQueuedPunishment(queuedPunishment);
 
         // Async webhook
@@ -146,7 +150,11 @@ public class PunishmentQueueManager {
 
     /** Process approval or denial */
     public boolean processApproval(String approvalId, boolean approved, CommandSender admin) {
-        QueuedPunishment queued = queuedPunishments.get(approvalId);
+        QueuedPunishment queued;
+        synchronized(queuedPunishments) {
+            queued = queuedPunishments.get(approvalId);
+        }
+
         if (queued == null) {
             if (admin instanceof Player) {
                 runSync(() -> admin.sendMessage("§cNo pending punishment found with ID: " + approvalId));
@@ -197,7 +205,9 @@ public class PunishmentQueueManager {
         }
 
         runSync(() -> {
-            queuedPunishments.remove(approvalId);
+            synchronized(queuedPunishments) {
+                queuedPunishments.remove(approvalId);
+            }
             plugin.getDatabaseManager().removeQueuedPunishment(approvalId);
             logger.info("Removed queued punishment ID: " + approvalId);
         });
@@ -206,23 +216,29 @@ public class PunishmentQueueManager {
 
     /** Get all queued punishments */
     public List<QueuedPunishment> getQueuedPunishments() {
-        return new ArrayList<>(queuedPunishments.values());
+        synchronized(queuedPunishments) {
+            return new ArrayList<>(queuedPunishments.values());
+        }
     }
 
     /** Get queued punishment by ID */
     public QueuedPunishment getQueuedPunishment(String approvalId) {
-        return queuedPunishments.get(approvalId);
+        synchronized(queuedPunishments) {
+            return queuedPunishments.get(approvalId);
+        }
     }
 
     /** Reset a player's punishment history */
     public boolean resetPlayerHistory(UUID playerUuid) {
-        queuedPunishments.entrySet().removeIf(entry -> {
-            if (entry.getValue().getPlayerUuid().equals(playerUuid)) {
-                plugin.getDatabaseManager().removeQueuedPunishment(entry.getValue().getApprovalId());
-                return true;
-            }
-            return false;
-        });
+        synchronized(queuedPunishments) {
+            queuedPunishments.entrySet().removeIf(entry -> {
+                if (entry.getValue().getPlayerUuid().equals(playerUuid)) {
+                    plugin.getDatabaseManager().removeQueuedPunishment(entry.getValue().getApprovalId());
+                    return true;
+                }
+                return false;
+            });
+        }
 
         String playerName = Optional.ofNullable(Bukkit.getOfflinePlayer(playerUuid).getName()).orElse("Unknown");
         runSync(() -> Bukkit.getPluginManager().callEvent(

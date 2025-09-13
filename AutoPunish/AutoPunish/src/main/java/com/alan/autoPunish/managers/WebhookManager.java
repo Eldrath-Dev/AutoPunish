@@ -83,15 +83,15 @@ public class WebhookManager {
         }
 
         String content = "**Punishment Denied**\\n" +
-                "Player: " + punishment.getPlayerName() + "\\n" +
-                "Rule: " + punishment.getRule() + "\\n" +
-                "Punishment: " + punishment.getType().substring(0, 1).toUpperCase() +
-                punishment.getType().substring(1) +
-                (formattedDuration.equals("Permanent") ? " (Permanent)" : " (" + punishment.getDuration() + ")") + "\\n" +
-                "Originally requested by: " + punishment.getStaffName() + "\\n" +
-                "Denied by: " + deniedBy + "\\n" +
+                "Player: " + escapeJson(punishment.getPlayerName()) + "\\n" +
+                "Rule: " + escapeJson(punishment.getRule()) + "\\n" +
+                "Punishment: " + escapeJson(punishment.getType().substring(0, 1).toUpperCase() +
+                punishment.getType().substring(1)) +
+                (formattedDuration.equals("Permanent") ? " (Permanent)" : " (" + escapeJson(punishment.getDuration()) + ")") + "\\n" +
+                "Originally requested by: " + escapeJson(punishment.getStaffName()) + "\\n" +
+                "Denied by: " + escapeJson(deniedBy) + "\\n" +
                 "Date: " + dateFormat.format(punishment.getQueuedDate()) + "\\n" +
-                "Approval ID: " + punishment.getApprovalId();
+                "Approval ID: " + escapeJson(punishment.getApprovalId());
 
         // Format as JSON for Discord webhook
         String jsonPayload = "{\"content\":\"" + content + "\"}";
@@ -111,21 +111,21 @@ public class WebhookManager {
         }
 
         String content = "**Punishment Queued for Approval**\\n" +
-                "Player: " + punishment.getPlayerName() + "\\n" +
-                "Rule: " + punishment.getRule() + "\\n" +
-                "Requested Punishment: " + punishment.getType().substring(0, 1).toUpperCase() +
-                punishment.getType().substring(1) +
-                (formattedDuration.equals("Permanent") ? " (Permanent)" : " (" + punishment.getDuration() + ")") + "\\n" +
-                "Staff: " + punishment.getStaffName() + "\\n" +
+                "Player: " + escapeJson(punishment.getPlayerName()) + "\\n" +
+                "Rule: " + escapeJson(punishment.getRule()) + "\\n" +
+                "Requested Punishment: " + escapeJson(punishment.getType().substring(0, 1).toUpperCase() +
+                punishment.getType().substring(1)) +
+                (formattedDuration.equals("Permanent") ? " (Permanent)" : " (" + escapeJson(punishment.getDuration()) + ")") + "\\n" +
+                "Staff: " + escapeJson(punishment.getStaffName()) + "\\n" +
                 "Date: " + dateFormat.format(punishment.getQueuedDate()) + "\\n" +
-                "Approval ID: " + punishment.getApprovalId();
+                "Approval ID: " + escapeJson(punishment.getApprovalId());
 
         if (severityScore > 0) {
             content += "\\nSeverity Score: " + severityScore;
         }
 
         content += "\\n\\n**This punishment requires admin approval due to its severity.**\\n" +
-                "Please use `/punishadmin approve " + punishment.getApprovalId() + "` in-game or the web panel to approve.";
+                "Please use `/punishadmin approve " + escapeJson(punishment.getApprovalId()) + "` in-game or the web panel to approve.";
 
         // Format as JSON for Discord webhook
         return "{\"content\":\"" + content + "\"}";
@@ -146,7 +146,7 @@ public class WebhookManager {
         // Format rule-specific violations
         StringBuilder ruleViolationsBuilder = new StringBuilder();
         if (rulePunishments != null && !rulePunishments.isEmpty()) {
-            ruleViolationsBuilder.append("\\n\\n**Previous Violations for ").append(punishment.getRule()).append(":**");
+            ruleViolationsBuilder.append("\\n\\n**Previous Violations for ").append(escapeJson(punishment.getRule())).append(":**");
             int count = 1;
             for (Punishment prev : rulePunishments) {
                 String prevDuration = prev.getDuration().equals("0") ?
@@ -154,9 +154,8 @@ public class WebhookManager {
 
                 ruleViolationsBuilder.append("\\n")
                         .append(count).append(". ")
-                        .append(prev.getType().substring(0, 1).toUpperCase())
-                        .append(prev.getType().substring(1))
-                        .append(" (").append(prevDuration).append(")")
+                        .append(escapeJson(prev.getType().substring(0, 1).toUpperCase() + prev.getType().substring(1)))
+                        .append(" (").append(escapeJson(prevDuration)).append(")")
                         .append(" - ").append(dateFormat.format(prev.getDate()));
                 count++;
             }
@@ -184,23 +183,21 @@ public class WebhookManager {
 
                 recentViolationsBuilder.append("\\n")
                         .append(i+1).append(". ")
-                        .append(prev.getRule())
+                        .append(escapeJson(prev.getRule()))
                         .append(" - ")
-                        .append(prev.getType().substring(0, 1).toUpperCase())
-                        .append(prev.getType().substring(1))
-                        .append(" (").append(prevDuration).append(")")
+                        .append(escapeJson(prev.getType().substring(0, 1).toUpperCase() + prev.getType().substring(1)))
+                        .append(" (").append(escapeJson(prevDuration)).append(")")
                         .append(" - ").append(dateFormat.format(prev.getDate()));
             }
         }
 
         String content = "**Punishment Issued**\\n" +
-                "Player: " + punishment.getPlayerName() + "\\n" +
-                "Rule: " + punishment.getRule() + "\\n" +
+                "Player: " + escapeJson(punishment.getPlayerName()) + "\\n" +
+                "Rule: " + escapeJson(punishment.getRule()) + "\\n" +
                 "Offense #: " + tier + "\\n" +
-                "Punishment: " + punishment.getType().substring(0, 1).toUpperCase() +
-                punishment.getType().substring(1) +
-                (formattedDuration.equals("Permanent") ? " (Permanent)" : " (" + punishment.getDuration() + ")") + "\\n" +
-                "Staff: " + punishment.getStaffName() + "\\n" +
+                "Punishment: " + escapeJson(punishment.getType().substring(0, 1).toUpperCase() + punishment.getType().substring(1)) +
+                (formattedDuration.equals("Permanent") ? " (Permanent)" : " (" + escapeJson(punishment.getDuration()) + ")") + "\\n" +
+                "Staff: " + escapeJson(punishment.getStaffName()) + "\\n" +
                 "Date: " + dateFormat.format(punishment.getDate());
 
         // Add severity score if available
@@ -256,5 +253,17 @@ public class WebhookManager {
                 logger.log(Level.SEVERE, "Error sending webhook: " + e.getMessage(), e);
             }
         });
+    }
+
+    /**
+     * Escape JSON special characters
+     */
+    private String escapeJson(String input) {
+        if (input == null) return "";
+        return input.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 }
