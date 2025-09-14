@@ -11,14 +11,6 @@ import java.util.*;
 import java.util.Date;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-// API events
-import com.alan.autoPunish.api.events.PunishmentQueuedEvent;
-import com.alan.autoPunish.api.events.PunishmentApprovedEvent;
-import com.alan.autoPunish.api.events.PunishmentDeniedEvent;
-import com.alan.autoPunish.api.events.PlayerHistoryResetEvent;
-
-// For password hashing
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -46,7 +38,7 @@ public class DatabaseManager {
             else setupSqlite();
 
             createTables();
-            migrateTables(); // Add this to handle schema updates
+            migrateTables(); // Handle schema updates
             logger.info("Database connection established successfully!");
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to connect to database: " + e.getMessage(), e);
@@ -85,18 +77,20 @@ public class DatabaseManager {
         try (Statement statement = connection.createStatement()) {
             logger.info("Ensuring database tables exist...");
 
-            // Create punishments table (may need migration)
+            // Create punishments table with proper column sizes
             statement.execute(
                     "CREATE TABLE IF NOT EXISTS punishments (" +
                             "id VARCHAR(36) PRIMARY KEY, " +
                             "player_uuid VARCHAR(36) NOT NULL, " +
-                            "player_name VARCHAR(16) NOT NULL, " +
+                            "player_name VARCHAR(100) NOT NULL, " +
                             "rule VARCHAR(50) NOT NULL, " +
                             "type VARCHAR(20) NOT NULL, " +
                             "duration VARCHAR(20) NOT NULL, " +
                             "staff_name VARCHAR(100) NOT NULL, " +
                             "staff_uuid VARCHAR(36) NOT NULL, " +
-                            "date TIMESTAMP NOT NULL" +
+                            "date TIMESTAMP NOT NULL, " +
+                            "evidence_link VARCHAR(500) NULL, " +
+                            "hidden BOOLEAN DEFAULT FALSE" +
                             ");"
             );
 
@@ -104,7 +98,7 @@ public class DatabaseManager {
                     "CREATE TABLE IF NOT EXISTS queued_punishments (" +
                             "id VARCHAR(36) PRIMARY KEY, " +
                             "player_uuid VARCHAR(36) NOT NULL, " +
-                            "player_name VARCHAR(16) NOT NULL, " +
+                            "player_name VARCHAR(100) NOT NULL, " +
                             "rule VARCHAR(50) NOT NULL, " +
                             "type VARCHAR(20) NOT NULL, " +
                             "duration VARCHAR(20) NOT NULL, " +
@@ -177,8 +171,104 @@ public class DatabaseManager {
                     logger.info("evidence_link column already exists or migration completed");
                 }
             }
+
+            // Check if hidden column exists
+            try {
+                DatabaseMetaData metaData = connection.getMetaData();
+                ResultSet rs = metaData.getColumns(null, null, "PUNISHMENTS", "HIDDEN");
+                if (!rs.next()) {
+                    // Column doesn't exist, add it
+                    logger.info("Migrating punishments table: adding hidden column");
+                    statement.execute("ALTER TABLE punishments ADD COLUMN hidden BOOLEAN DEFAULT FALSE");
+                } else {
+                    logger.info("hidden column already exists in punishments table");
+                }
+                rs.close();
+            } catch (SQLException e) {
+                logger.log(Level.WARNING, "Could not check for hidden column: " + e.getMessage());
+                // Try to add column anyway - might fail if it already exists
+                try {
+                    statement.execute("ALTER TABLE punishments ADD COLUMN hidden BOOLEAN DEFAULT FALSE");
+                    logger.info("Added hidden column to punishments table");
+                } catch (SQLException ignored) {
+                    // Column might already exist
+                    logger.info("hidden column already exists or migration completed");
+                }
+            }
+
+            // Check and fix column sizes if needed
+            fixColumnSizes(statement);
         } catch (Exception e) {
             logger.log(Level.WARNING, "Database migration check failed: " + e.getMessage());
+        }
+    }
+
+    // NEW: Fix column sizes for existing databases
+    private void fixColumnSizes(Statement statement) throws SQLException {
+        logger.info("Checking column sizes for migration...");
+
+        // Check staff_name column size
+        try {
+            DatabaseMetaData metaData = connection.getMetaData();
+            ResultSet rs = metaData.getColumns(null, null, "PUNISHMENTS", "STAFF_NAME");
+            if (rs.next()) {
+                int size = rs.getInt("COLUMN_SIZE");
+                if (size < 100) {
+                    logger.info("Migrating punishments table: increasing staff_name column size from " + size + " to 100");
+                    statement.execute("ALTER TABLE punishments ALTER COLUMN staff_name VARCHAR(100)");
+                }
+            }
+            rs.close();
+        } catch (SQLException e) {
+            logger.log(Level.WARNING, "Could not check staff_name column size: " + e.getMessage());
+        }
+
+        // Check player_name column size
+        try {
+            DatabaseMetaData metaData = connection.getMetaData();
+            ResultSet rs = metaData.getColumns(null, null, "PUNISHMENTS", "PLAYER_NAME");
+            if (rs.next()) {
+                int size = rs.getInt("COLUMN_SIZE");
+                if (size < 100) {
+                    logger.info("Migrating punishments table: increasing player_name column size from " + size + " to 100");
+                    statement.execute("ALTER TABLE punishments ALTER COLUMN player_name VARCHAR(100)");
+                }
+            }
+            rs.close();
+        } catch (SQLException e) {
+            logger.log(Level.WARNING, "Could not check player_name column size: " + e.getMessage());
+        }
+
+        // Check staff_name column size in queued_punishments
+        try {
+            DatabaseMetaData metaData = connection.getMetaData();
+            ResultSet rs = metaData.getColumns(null, null, "QUEUED_PUNISHMENTS", "STAFF_NAME");
+            if (rs.next()) {
+                int size = rs.getInt("COLUMN_SIZE");
+                if (size < 100) {
+                    logger.info("Migrating queued_punishments table: increasing staff_name column size from " + size + " to 100");
+                    statement.execute("ALTER TABLE queued_punishments ALTER COLUMN staff_name VARCHAR(100)");
+                }
+            }
+            rs.close();
+        } catch (SQLException e) {
+            logger.log(Level.WARNING, "Could not check queued_punishments staff_name column size: " + e.getMessage());
+        }
+
+        // Check player_name column size in queued_punishments
+        try {
+            DatabaseMetaData metaData = connection.getMetaData();
+            ResultSet rs = metaData.getColumns(null, null, "QUEUED_PUNISHMENTS", "PLAYER_NAME");
+            if (rs.next()) {
+                int size = rs.getInt("COLUMN_SIZE");
+                if (size < 100) {
+                    logger.info("Migrating queued_punishments table: increasing player_name column size from " + size + " to 100");
+                    statement.execute("ALTER TABLE queued_punishments ALTER COLUMN player_name VARCHAR(100)");
+                }
+            }
+            rs.close();
+        } catch (SQLException e) {
+            logger.log(Level.WARNING, "Could not check queued_punishments player_name column size: " + e.getMessage());
         }
     }
 
@@ -291,7 +381,7 @@ public class DatabaseManager {
 
     // --- Punishments ---
     public void savePunishment(Punishment p) {
-        String sql = "INSERT INTO punishments (id, player_uuid, player_name, rule, type, duration, staff_name, staff_uuid, date, evidence_link) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
+        String sql = "INSERT INTO punishments (id, player_uuid, player_name, rule, type, duration, staff_name, staff_uuid, date, evidence_link, hidden) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
         try (Connection conn = getConnection();
              PreparedStatement st = conn.prepareStatement(sql)) {
             st.setString(1, p.getId().toString());
@@ -304,6 +394,7 @@ public class DatabaseManager {
             st.setString(8, p.getStaffUuid().toString());
             st.setTimestamp(9, new Timestamp(p.getDate().getTime()));
             st.setString(10, null); // evidence_link is initially null
+            st.setBoolean(11, false); // hidden is initially false
             st.executeUpdate();
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to save punishment: " + e.getMessage(), e);
@@ -312,17 +403,17 @@ public class DatabaseManager {
 
     /** --- NEW METHODS --- **/
 
-    // Get all punishments for a player
+    // Get all punishments for a player (excluding hidden)
     public List<Punishment> getPunishmentHistory(UUID playerUuid) {
-        return fetchPunishments("SELECT * FROM punishments WHERE player_uuid = ? ORDER BY date DESC;", playerUuid.toString());
+        return fetchPunishments("SELECT * FROM punishments WHERE player_uuid = ? AND hidden = FALSE ORDER BY date DESC;", playerUuid.toString());
     }
 
-    // Get punishments for a player filtered by rule
+    // Get punishments for a player filtered by rule (excluding hidden)
     public List<Punishment> getPunishmentHistoryForRule(UUID playerUuid, String rule) {
-        return fetchPunishments("SELECT * FROM punishments WHERE player_uuid = ? AND rule = ? ORDER BY date ASC;", playerUuid.toString(), rule);
+        return fetchPunishments("SELECT * FROM punishments WHERE player_uuid = ? AND rule = ? AND hidden = FALSE ORDER BY date ASC;", playerUuid.toString(), rule);
     }
 
-    // Helper for executing queries with parameters
+    // Helper for executing queries with parameters (excluding hidden by default)
     private List<Punishment> fetchPunishments(String sql, Object... params) {
         List<Punishment> punishments = new ArrayList<>();
         try (Connection conn = getConnection();
@@ -367,6 +458,43 @@ public class DatabaseManager {
             logger.log(Level.SEVERE, "Failed to fetch punishment by ID: " + e.getMessage(), e);
         }
         return null;
+    }
+
+    // NEW: Hide/unhide a punishment
+    public boolean setPunishmentHidden(String punishmentId, boolean hidden) {
+        String sql = "UPDATE punishments SET hidden = ? WHERE id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement st = conn.prepareStatement(sql)) {
+            st.setBoolean(1, hidden);
+            st.setString(2, punishmentId);
+            int rowsAffected = st.executeUpdate();
+            return rowsAffected > 0;
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Failed to set punishment hidden status: " + e.getMessage(), e);
+            return false;
+        }
+    }
+
+    // NEW: Get hidden status of a punishment
+    public boolean isPunishmentHidden(String punishmentId) {
+        String sql = "SELECT hidden FROM punishments WHERE id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement st = conn.prepareStatement(sql)) {
+            st.setString(1, punishmentId);
+            try (ResultSet rs = st.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getBoolean("hidden");
+                }
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Failed to check punishment hidden status: " + e.getMessage(), e);
+        }
+        return false;
+    }
+
+    // NEW: Get all punishments including hidden ones (for staff management)
+    public List<Punishment> getAllPunishments() {
+        return fetchPunishments("SELECT * FROM punishments ORDER BY date DESC;");
     }
 
     // --- Queued Punishments ---
@@ -599,7 +727,7 @@ public class DatabaseManager {
             byte[] hashedPassword = md.digest(password.getBytes());
 
             return Arrays.equals(hash, hashedPassword);
-        } catch (NoSuchAlgorithmException e) {
+        } catch (Exception e) {
             logger.log(Level.SEVERE, "Failed to verify password", e);
             return false;
         }
@@ -655,4 +783,3 @@ public class DatabaseManager {
         );
     }
 }
-

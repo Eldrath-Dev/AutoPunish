@@ -76,6 +76,10 @@ public class PublicWebPanelManager {
         // NEW: Evidence link endpoints
         app.put("/api/punishments/{id}/evidence", this::updateEvidenceLink);
 
+        // NEW: Hide/unhide punishment
+        app.put("/api/punishments/{id}/hide", this::togglePunishmentVisibility);
+        app.get("/api/punishments/{id}/hidden", this::getPunishmentHiddenStatus);
+
         // NEW: Staff chat endpoints
         app.get("/api/staff/chat", this::getChatMessages);
         app.post("/api/staff/chat", this::postChatMessage);
@@ -105,9 +109,9 @@ public class PublicWebPanelManager {
             List<Map<String, Object>> punishments = new ArrayList<>();
             int total = 0;
 
-            // Build SQL dynamically
-            StringBuilder sql = new StringBuilder("SELECT * FROM punishments");
-            StringBuilder countSql = new StringBuilder("SELECT COUNT(*) AS total FROM punishments");
+            // Build SQL dynamically - EXCLUDE HIDDEN PUNISHMENTS
+            StringBuilder sql = new StringBuilder("SELECT * FROM punishments WHERE hidden = FALSE");
+            StringBuilder countSql = new StringBuilder("SELECT COUNT(*) AS total FROM punishments WHERE hidden = FALSE");
             List<Object> params = new ArrayList<>();
             List<Object> countParams = new ArrayList<>();
 
@@ -130,8 +134,8 @@ public class PublicWebPanelManager {
 
             if (!conditions.isEmpty()) {
                 String where = String.join(" AND ", conditions);
-                sql.append(" WHERE ").append(where);
-                countSql.append(" WHERE ").append(where);
+                sql.append(" AND ").append(where);
+                countSql.append(" AND ").append(where);
             }
 
             // Sorting
@@ -164,6 +168,7 @@ public class PublicWebPanelManager {
                         punishment.put("staff_uuid", rs.getString("staff_uuid"));
                         punishment.put("date", rs.getTimestamp("date"));
                         punishment.put("evidence_link", rs.getString("evidence_link"));
+                        punishment.put("hidden", rs.getBoolean("hidden"));
                         punishments.add(punishment);
                     }
                 }
@@ -211,6 +216,7 @@ public class PublicWebPanelManager {
                         punishment.put("staff_uuid", rs.getString("staff_uuid"));
                         punishment.put("date", rs.getTimestamp("date"));
                         punishment.put("evidence_link", rs.getString("evidence_link"));
+                        punishment.put("hidden", rs.getBoolean("hidden"));
 
                         ctx.json(punishment);
                     } else {
@@ -258,6 +264,64 @@ public class PublicWebPanelManager {
             logger.log(Level.SEVERE, "Error updating evidence link: " + e.getMessage(), e);
             ctx.status(500);
             ctx.json(Map.of("error", "Failed to update evidence link: " + e.getMessage()));
+        }
+    }
+
+    // NEW: Toggle punishment visibility (hide/unhide)
+    private void togglePunishmentVisibility(Context ctx) {
+        try {
+            // Check authentication
+            if (!isAuthenticated(ctx)) {
+                ctx.status(401);
+                ctx.json(Map.of("error", "Unauthorized"));
+                return;
+            }
+
+            String id = ctx.pathParam("id");
+            Map<String, Object> requestBody = ctx.bodyAsClass(Map.class);
+            boolean hidden = (Boolean) requestBody.getOrDefault("hidden", true);
+
+            boolean success = plugin.getDatabaseManager().setPunishmentHidden(id, hidden);
+
+            if (success) {
+                // Broadcast to in-game chat
+                String action = hidden ? "hidden" : "unhidden";
+                plugin.getServer().broadcastMessage("§6[AutoPunish] §eStaff member has " + action + " a punishment (ID: " + id + ")");
+
+                ctx.json(Map.of(
+                        "success", true,
+                        "message", "Punishment " + action + " successfully",
+                        "hidden", hidden
+                ));
+            } else {
+                ctx.status(500);
+                ctx.json(Map.of("error", "Failed to update punishment visibility"));
+            }
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error toggling punishment visibility: " + e.getMessage(), e);
+            ctx.status(500);
+            ctx.json(Map.of("error", "Failed to update punishment visibility: " + e.getMessage()));
+        }
+    }
+
+    // NEW: Get punishment hidden status
+    private void getPunishmentHiddenStatus(Context ctx) {
+        try {
+            // Check authentication
+            if (!isAuthenticated(ctx)) {
+                ctx.status(401);
+                ctx.json(Map.of("error", "Unauthorized"));
+                return;
+            }
+
+            String id = ctx.pathParam("id");
+            boolean hidden = plugin.getDatabaseManager().isPunishmentHidden(id);
+
+            ctx.json(Map.of("hidden", hidden));
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error getting punishment hidden status: " + e.getMessage(), e);
+            ctx.status(500);
+            ctx.json(Map.of("error", "Failed to get punishment hidden status: " + e.getMessage()));
         }
     }
 
@@ -309,6 +373,9 @@ public class PublicWebPanelManager {
             boolean success = plugin.getDatabaseManager().saveChatMessage(staffName, staffUuid, message);
 
             if (success) {
+                // Broadcast message to in-game chat
+                plugin.getServer().broadcastMessage("§6[Staff Chat] §e" + staffName + ": §f" + message);
+
                 ctx.json(Map.of("success", true, "message", "Message sent successfully"));
             } else {
                 ctx.status(500);
@@ -512,8 +579,8 @@ public class PublicWebPanelManager {
 
     private void getPunishmentStats(Context ctx) {
         try {
-            String sql = "SELECT type, COUNT(*) AS count FROM punishments GROUP BY type";
-            String recentSql = "SELECT COUNT(*) AS recent FROM punishments WHERE date > ?";
+            String sql = "SELECT type, COUNT(*) AS count FROM punishments WHERE hidden = FALSE GROUP BY type";
+            String recentSql = "SELECT COUNT(*) AS recent FROM punishments WHERE date > ? AND hidden = FALSE";
             Map<String, Integer> counts = new HashMap<>();
             int recent = 0;
 
@@ -563,4 +630,3 @@ public class PublicWebPanelManager {
         }
     }
 }
-

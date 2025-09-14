@@ -621,6 +621,39 @@ main {
     background-color: #c82333;
 }
 
+/* --- Hidden Punishment Styles --- */
+.hidden-punishment {
+    background-color: #fff3cd !important;
+    opacity: 0.8;
+}
+
+.hidden-punishment:hover {
+    background-color: #fff3cd !important;
+    opacity: 1;
+}
+
+.hidden-badge {
+    background-color: #ffc107;
+    color: #000;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    margin-left: 5px;
+}
+
+/* --- Action Buttons --- */
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.action-buttons .btn {
+    width: 100%;
+    justify-content: center;
+}
+
 /* --- Modals --- */
 .modal {
     display: block;
@@ -903,6 +936,16 @@ footer {
 
     .staff-member-actions {
         align-self: flex-end;
+    }
+
+    .action-buttons {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .action-buttons .btn {
+        flex: 1;
+        min-width: 120px;
     }
 }
 

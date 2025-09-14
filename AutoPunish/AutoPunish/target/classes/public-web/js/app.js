@@ -422,10 +422,8 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `;
 
-    // Load staff list
     loadStaffList();
 
-    // Handle form submission
     document.getElementById('add-staff-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const username = document.getElementById('new-username').value;
@@ -697,6 +695,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const date = p.date ? new Date(p.date).toLocaleString() : 'Unknown';
         const duration = p.duration === "0" ? "Permanent" : (p.duration || 'Unknown');
         const evidenceLink = p.evidence_link || null;
+        const isHidden = p.hidden || false;
 
         let evidenceCell = '';
         if (evidenceLink) {
@@ -711,15 +710,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentUser) {
           actionsCell = `
             <td>
-              <button class="btn btn-small btn-outline evidence-btn" data-id="${p.id}">
-                <i class="fas fa-link"></i> ${evidenceLink ? 'Edit' : 'Add'} Evidence
-              </button>
+              <div class="action-buttons">
+                <button class="btn btn-small btn-outline evidence-btn" data-id="${p.id}">
+                  <i class="fas fa-link"></i> ${evidenceLink ? 'Edit' : 'Add'} Evidence
+                </button>
+                <button class="btn btn-small ${isHidden ? 'btn-primary' : 'btn-outline'} hide-btn" data-id="${p.id}" data-hidden="${isHidden}">
+                  <i class="fas fa-${isHidden ? 'eye' : 'eye-slash'}"></i> ${isHidden ? 'Unhide' : 'Hide'}
+                </button>
+              </div>
             </td>`;
         }
 
         return `
-          <tr data-id="${p.id}">
-            <td>${escapeHtml(playerName)}</td>
+          <tr data-id="${p.id}" class="${isHidden ? 'hidden-punishment' : ''}">
+            <td>${escapeHtml(playerName)} ${isHidden ? '<span class="hidden-badge">HIDDEN</span>' : ''}</td>
             <td>${escapeHtml(rule)}</td>
             <td>${escapeHtml(staffName)}</td>
             <td>${escapeHtml(date)}</td>
@@ -735,6 +739,17 @@ document.addEventListener('DOMContentLoaded', () => {
           button.addEventListener('click', function() {
             const punishmentId = this.dataset.id;
             showEvidenceModal(punishmentId);
+          });
+        });
+
+        // Attach event listeners for hide buttons
+        document.querySelectorAll('.hide-btn').forEach(button => {
+          button.addEventListener('click', async function() {
+            const punishmentId = this.dataset.id;
+            const isHidden = this.dataset.hidden === 'true';
+
+            // Show confirmation modal
+            showHidePunishmentModal(punishmentId, isHidden);
           });
         });
       }
@@ -807,6 +822,75 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } catch (error) {
         showMessage('Failed to save evidence link: ' + error.message, 'error');
+      }
+    });
+
+    // Close modal when clicking outside
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        closeModal();
+      }
+    });
+  }
+
+  // NEW: Hide Punishment Modal
+  function showHidePunishmentModal(punishmentId, currentHiddenStatus) {
+    // Create modal HTML
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.id = 'hide-punishment-modal';
+    modal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3><i class="fas fa-eye-slash"></i> ${currentHiddenStatus ? 'Unhide' : 'Hide'} Punishment</h3>
+          <span class="modal-close">&times;</span>
+        </div>
+        <div class="modal-body">
+          <p>Are you sure you want to ${currentHiddenStatus ? 'unhide' : 'hide'} this punishment?</p>
+          <p><strong>Note:</strong> ${currentHiddenStatus ? 'Unhiding' : 'Hiding'} this punishment will ${currentHiddenStatus ? 'make it visible' : 'remove it from'} the public directory.</p>
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline modal-close-btn">Cancel</button>
+            <button type="button" class="btn btn-primary" id="confirm-hide-btn">
+              <i class="fas fa-${currentHiddenStatus ? 'eye' : 'eye-slash'}"></i> ${currentHiddenStatus ? 'Unhide' : 'Hide'} Punishment
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Attach event listeners
+    const closeModal = () => {
+      document.body.removeChild(modal);
+    };
+
+    modal.querySelector('.modal-close').addEventListener('click', closeModal);
+    modal.querySelector('.modal-close-btn').addEventListener('click', closeModal);
+
+    modal.querySelector('#confirm-hide-btn').addEventListener('click', async () => {
+      try {
+        const response = await fetch(`/api/punishments/${punishmentId}/hide`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ hidden: !currentHiddenStatus })
+        });
+
+        if (response.ok) {
+          showMessage(`Punishment ${currentHiddenStatus ? 'unhidden' : 'hidden'} successfully`, 'success');
+          closeModal();
+          // Refresh current page
+          const hash = window.location.hash || '#/';
+          const page = hash.substring(2) || 'home';
+          loadPageContent(page);
+        } else {
+          const data = await response.json();
+          showMessage(data.error || 'Failed to update punishment visibility', 'error');
+        }
+      } catch (error) {
+        showMessage('Failed to update punishment visibility: ' + error.message, 'error');
       }
     });
 
