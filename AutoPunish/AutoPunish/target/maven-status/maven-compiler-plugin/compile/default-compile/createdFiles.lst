@@ -9,6 +9,7 @@ com\alan\autoPunish\models\Punishment.class
 com\alan\autoPunish\utils\ConfigUtils.class
 com\alan\autoPunish\listeners\ChatListener.class
 com\alan\autoPunish\commands\ResetHistoryCommand.class
+com\alan\autoPunish\commands\StaffChatCommand.class
 com\alan\autoPunish\managers\PublicWebPanelManager.class
 com\alan\autoPunish\api\events\PlayerHistoryResetEvent.class
 com\alan\autoPunish\managers\PunishmentManager.class

@@ -20,6 +20,7 @@ public class AutoPunish extends JavaPlugin {
     private PunishmentQueueManager punishmentQueueManager;
     private PunishmentManager punishmentManager;
     private PublicWebPanelManager publicWebPanelManager;
+    private ChatListener chatListener; // NEW: Store chat listener reference
 
     @Override
     public void onEnable() {
@@ -80,6 +81,9 @@ public class AutoPunish extends JavaPlugin {
         Objects.requireNonNull(getCommand("resethistory")).setExecutor(new ResetHistoryCommand(this));
         Objects.requireNonNull(getCommand("rule")).setExecutor(new RuleManagementCommand(this));
 
+        // NEW: Staff chat command
+        Objects.requireNonNull(getCommand("staffchat")).setExecutor(new StaffChatCommand(this, chatListener));
+
         // Register tab completers for commands that support them
         Objects.requireNonNull(getCommand("punish")).setTabCompleter(new PunishCommand(this));
         Objects.requireNonNull(getCommand("punishments")).setTabCompleter(new PunishmentsCommand(this));
@@ -88,11 +92,16 @@ public class AutoPunish extends JavaPlugin {
         Objects.requireNonNull(getCommand("resethistory")).setTabCompleter(new ResetHistoryCommand(this));
         Objects.requireNonNull(getCommand("rule")).setTabCompleter(new RuleManagementCommand(this));
 
+        // NEW: Staff chat tab completer
+        Objects.requireNonNull(getCommand("staffchat")).setTabCompleter(new StaffChatCommand(this, chatListener));
+
         // IMPORTANT: The "punishreload" command does not have a tab completer, so we do not register one.
     }
 
     private void registerListeners() {
-        getServer().getPluginManager().registerEvents(new ChatListener(this), this);
+        // NEW: Store chat listener reference for command access
+        this.chatListener = new ChatListener(this);
+        getServer().getPluginManager().registerEvents(chatListener, this);
     }
 
     @Override
@@ -137,6 +146,11 @@ public class AutoPunish extends JavaPlugin {
 
     public PublicWebPanelManager getPublicWebPanelManager() {
         return publicWebPanelManager;
+    }
+
+    // NEW: Getter for ChatListener
+    public ChatListener getChatListener() {
+        return chatListener;
     }
 
     // --- NEW: Owner Account Creation ---

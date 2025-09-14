@@ -6,6 +6,13 @@ authors: [AlanDev]
 description: Automatic punishment escalation system for Minecraft servers
 
 commands:
+
+  staffchat:
+    description: Send a message to the staff chat
+    usage: "§c/staffchat <message>"
+    permission: autopunish.staff.chat
+    aliases: [ sc, schat ]
+
   punish:
     description: Punish a player based on rule violation
     usage: "§c/punish <player> <rule>"
@@ -45,6 +52,11 @@ permissions:
   autopunish.punish:
     description: Allows using the punish command
     default: op
+
+  autopunish.staff.chat:
+    description: Allows using the staff chat command
+    default: op
+
 
   # Viewing permissions
   autopunish.view.history:
