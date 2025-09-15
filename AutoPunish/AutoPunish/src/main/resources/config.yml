@@ -1,146 +1,58 @@
-# AutoPunish Configuration
-# Version: 3.0.0
+discord-webhook: "https://discord.com/api/webhooks/your-webhook-url"
 
-# Database Settings
-database:
-  storage-type: sqlite  # 'sqlite' or 'mysql'
-  # For SQLite (H2 file DB)
-  db-path: punishments  # Relative to plugin folder
-  # For MySQL (uncomment and configure)
-  # db-host: localhost
-  # db-port: 3306
-  # db-name: autopunish
-  # db-username: root
-  # db-password: password
+storage:
+  type: "sqlite"
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "punishments"
+    username: "root"
+    password: "password"
 
-  # Connection Pool Settings (HikariCP) - New section for pooling
-  pool:
-    minimum-idle: 1        # Min idle connections
-    maximum-pool-size: 10  # Max connections (adjust for traffic)
-    connection-timeout: 5000  # ms to wait for connection
-    idle-timeout: 600000   # ms before closing idle connection
-    max-lifetime: 1800000  # ms before recycling connection
 
-# Owner/Initial Admin (auto-created if missing)
-owner:
-  username: AlanTheDev
-  password: changeme123  # Plaintext; will be hashed on creation
-  uuid: "00000000-0000-0000-0000-000000000000"  # Replace with actual UUID if known
-
-# Punishment Rules (unchanged)
-rules:
-  hacking:
-    description: "Using cheats/hacks"
-    tiers:
-      - severity: 1
-        duration: "1h"
-      - severity: 2
-        duration: "1d"
-      - severity: 3
-        duration: "perm"
-  impersonation:
-    description: "Impersonating staff/players"
-    tiers:
-      - severity: 1
-        duration: "30m"
-      - severity: 2
-        duration: "2h"
-      - severity: 3
-        duration: "1d"
-      - severity: 4
-        duration: "1w"
-      - severity: 5
-        duration: "perm"
-  minor_chat_violations:
-    description: "Minor chat issues (e.g., caps)"
-    tiers:
-      - severity: 1
-        duration: "5m"
-      - severity: 2
-        duration: "15m"
-      - severity: 3
-        duration: "1h"
-      - severity: 4
-        duration: "4h"
-      - severity: 5
-        duration: "1d"
-  test:
-    description: "Test rule"
-    tiers:
-      - severity: 1
-        duration: "1m"
-  griefing:
-    description: "Destroying builds"
-    tiers:
-      - severity: 1
-        duration: "30m"
-      - severity: 2
-        duration: "2h"
-      - severity: 3
-        duration: "1d"
-      - severity: 4
-        duration: "perm"
-  advertising:
-    description: "Server advertising"
-    tiers:
-      - severity: 1
-        duration: "1h"
-      - severity: 2
-        duration: "1d"
-      - severity: 3
-        duration: "1w"
-      - severity: 4
-        duration: "perm"
-  spam:
-    description: "Spamming chat"
-    tiers:
-      - severity: 1
-        duration: "5m"
-      - severity: 2
-        duration: "15m"
-      - severity: 3
-        duration: "1h"
-      - severity: 4
-        duration: "4h"
-      - severity: 5
-        duration: "1d"
-  harassment:
-    description: "Harassing players"
-    tiers:
-      - severity: 1
-        duration: "30m"
-      - severity: 2
-        duration: "2h"
-      - severity: 3
-        duration: "1d"
-      - severity: 4
-        duration: "perm"
-
-# Queue Settings (unchanged)
-queue:
-  approval-required: true  # Require staff approval for punishments
-  auto-apply-low-severity: true  # Auto-apply if severity <= 2
-  check-interval: 30  # Seconds between queue checks
-
-# Web Panel Settings (unchanged)
-web:
-  port: 8081  # Port for the public web panel
-  session-timeout: 3600  # Session expiry in seconds
-
-# Webhook Settings (unchanged)
-webhooks:
-  enabled: false
-  url: "https://discord.com/api/webhooks/..."  # Your Discord webhook URL
-  events:
-    - punishment_applied
-    - punishment_approved
-    - punishment_denied
-
-# Staff Chat Settings (unchanged)
-staff-chat:
+# *** NEW: Public punishment directory settings ***
+public-web-panel:
   enabled: true
-  log-to-db: true  # Store messages in DB for web panel access
+  port: 8081
 
-# History Retention (unchanged)
-retention:
-  delete-after-days: 1400  # Auto-delete old punishments after this many days
+# Approval system settings
+approval-system:
+  enabled: true
+  # Minimum ban duration that requires approval (in days)
+  require-approval-after: 7
+  # Staff ranks that can bypass approval
+  bypass-approval-permissions:
+    - "autopunish.bypass.approval"
+    - "autopunish.admin.senior"
+  # Notification settings
+  notify-admin-on-auto-approved: true
+
+rules:
+  minor_chat_violations:
+    - type: "warn"
+      duration: "0"
+    - type: "mute"
+      duration: "1h"
+    - type: "mute"
+      duration: "24h"
+    - type: "mute"
+      duration: "3d"
+    - type: "mute"
+      duration: "7d"
+  spam:
+    - type: "warn"
+      duration: "0"
+    - type: "mute"
+      duration: "10m"
+    - type: "mute"
+      duration: "30m"
+    - type: "mute"
+      duration: "2h"
+    - type: "mute"
+      duration: "1d"
+  impersonation:
+    - type: "warn"
+      duration: "0"
+    - type: "mute"
+      duration: "1d"
+    - type: "ban"
