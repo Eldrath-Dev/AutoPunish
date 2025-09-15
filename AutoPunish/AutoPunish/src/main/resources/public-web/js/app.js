@@ -1,4 +1,3 @@
-```javascript
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM loaded, initializing app...');
   const mainContent = document.getElementById('main-content');
@@ -1069,4 +1068,3 @@ document.addEventListener('DOMContentLoaded', () => {
   safeFeatherReplace();
   navigate();
 });
-```

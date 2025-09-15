@@ -19,6 +19,7 @@
     <build>
         <defaultGoal>clean package</defaultGoal>
         <plugins>
+            <!-- Compiler -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -28,6 +29,8 @@
                     <target>${java.version}</target>
                 </configuration>
             </plugin>
+
+            <!-- Shade (fat JAR) -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
@@ -39,12 +42,18 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <!-- Prevent original pluginname.jar + shaded.jar -->
+                            <shadedArtifactAttached>false</shadedArtifactAttached>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
+
+                            <!-- Clean final JAR name -->
+                            <finalName>${project.artifactId}-${project.version}</finalName>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
         </plugins>
+
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
@@ -61,6 +70,7 @@
     </repositories>
 
     <dependencies>
+        <!-- Paper API -->
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
@@ -84,15 +94,14 @@
             <scope>compile</scope>
         </dependency>
 
-        <!-- Web Panel Dependencies -->
-        <!-- Javalin - lightweight web framework -->
+        <!-- Javalin (web framework) -->
         <dependency>
             <groupId>io.javalin</groupId>
             <artifactId>javalin</artifactId>
             <version>6.7.0</version>
         </dependency>
 
-        <!-- Jackson for JSON handling -->
+        <!-- Jackson for JSON -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
@@ -106,7 +115,7 @@
             <version>2.0.7</version>
         </dependency>
 
-        <!-- SLF4J Simple implementation -->
+        <!-- SLF4J Simple -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
