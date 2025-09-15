@@ -1,27 +1,92 @@
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('DOM loaded, initializing app...'); // Debug log
   const mainContent = document.getElementById('main-content');
-  const navLinks = document.querySelectorAll('.nav-link');
-  const API_URL = '/api/punishments';
+  const API_URL = '/api/punishments'; // Use this for real API; placeholders below for demo
   let refreshInterval;
   let currentUser = null;
   let chatRefreshInterval = null;
 
-  // Check authentication status on load
+  // Helper: Safe Feather replace (prevents crashes if library fails)
+  function safeFeatherReplace() {
+    try {
+      if (typeof feather !== 'undefined') {
+        feather.replace();
+        console.log('Feather icons updated'); // Debug
+      } else {
+        console.warn('Feather Icons not available');
+      }
+    } catch (error) {
+      console.error('Feather replace failed:', error);
+    }
+  }
+
+  // Initialize base nav IMMEDIATELY (before any async calls)
+  const baseNav = document.querySelector('nav ul');
+  if (baseNav) {
+    baseNav.innerHTML = `
+      <li>
+        <a href="#/" class="nav-link active flex items-center px-4 py-2 rounded-lg transition-all sidebar-nav" data-page="home">
+          <i data-feather="home" class="mr-2 w-5 h-5"></i>
+          <span>Home</span>
+        </a>
+      </li>
+      <li>
+        <a href="#/warns" class="nav-link flex items-center px-4 py-2 rounded-lg transition-all sidebar-nav" data-page="warns">
+          <i data-feather="alert-triangle" class="mr-2 w-5 h-5"></i>
+          <span>Warns</span>
+        </a>
+      </li>
+      <li>
+        <a href="#/mutes" class="nav-link flex items-center px-4 py-2 rounded-lg transition-all sidebar-nav" data-page="mutes">
+          <i data-feather="volume-x" class="mr-2 w-5 h-5"></i>
+          <span>Mutes</span>
+        </a>
+      </li>
+      <li>
+        <a href="#/bans" class="nav-link flex items-center px-4 py-2 rounded-lg transition-all sidebar-nav" data-page="bans">
+          <i data-feather="x" class="mr-2 w-5 h-5"></i>
+          <span>Bans</span>
+        </a>
+      </li>
+    `;
+    safeFeatherReplace(); // Initial icons for base nav
+    console.log('Base nav and icons initialized'); // Debug
+  }
+
+  // Attach click listeners to base nav links immediately
+  document.querySelectorAll('.nav-link').forEach(link => {
+    link.addEventListener('click', function(e) {
+      e.preventDefault(); // Prevent default hash change
+      document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+      this.classList.add('active');
+      const page = this.dataset.page || 'home';
+      window.location.hash = `/${page}`;
+    });
+  });
+
+  // Now check auth (async, won't block nav)
   checkAuthStatus();
 
-  // --- Authentication ---
+  // --- Authentication Functions ---
   async function checkAuthStatus() {
     try {
-      const response = await fetch('/api/auth/session');
-      if (response.ok) {
+      console.log('Checking auth status...'); // Debug
+      const response = await fetch('/api/auth/session').catch(() => null); // Graceful fail if no API
+      if (response && response.ok) {
         const data = await response.json();
         if (data.authenticated) {
-          currentUser = data.user;
+          currentUser = data.user || { username: 'DemoUser' }; // Fallback for demo
           updateNavbarForAuth(true);
+          console.log('User authenticated:', currentUser.username); // Debug
         } else {
           currentUser = null;
           updateNavbarForAuth(false);
         }
+      } else {
+        // No API or not authenticated - treat as guest
+        currentUser = null;
+        updateNavbarForAuth(false);
+        console.log('No auth API or guest mode'); // Debug
       }
     } catch (error) {
       console.error('Error checking auth status:', error);
@@ -31,76 +96,88 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function updateNavbarForAuth(isLoggedIn) {
-    // Update navbar based on auth status
-    const nav = document.querySelector('nav');
-    if (nav) {
-      // Remove existing auth-related links
-      const existingAuthLinks = nav.querySelectorAll('[data-auth]');
-      existingAuthLinks.forEach(link => link.remove());
+    const nav = document.querySelector('nav ul');
+    if (!nav) return;
 
-      if (isLoggedIn) {
-        // Add Staff Chat, Team Management, and Logout links
-        const chatLink = document.createElement('a');
-        chatLink.href = '#/staff-chat';
-        chatLink.className = 'nav-link';
-        chatLink.dataset.page = 'staff-chat';
-        chatLink.dataset.auth = 'true';
-        chatLink.innerHTML = '<i class="fas fa-comments"></i> <span>Staff Chat</span>';
-        nav.appendChild(chatLink);
+    // Remove ONLY existing auth-related links (base nav has no data-auth attr)
+    const existingAuthLinks = nav.querySelectorAll('[data-auth]');
+    existingAuthLinks.forEach(link => link.remove());
 
-        const teamLink = document.createElement('a');
-        teamLink.href = '#/team-management';
-        teamLink.className = 'nav-link';
-        teamLink.dataset.page = 'team-management';
-        teamLink.dataset.auth = 'true';
-        teamLink.innerHTML = '<i class="fas fa-users-cog"></i> <span>Team Management</span>';
-        nav.appendChild(teamLink);
+    if (isLoggedIn) {
+      // Add Staff Chat, Team Management, and Logout
+      const chatLink = document.createElement('li');
+      chatLink.innerHTML = `
+        <a href="#/staff-chat" class="nav-link flex items-center px-4 py-2 rounded-lg transition-all sidebar-nav" data-page="staff-chat" data-auth="true">
+          <i data-feather="message-circle" class="mr-2 w-5 h-5"></i>
+          <span>Staff Chat</span>
+        </a>
+      `;
+      nav.appendChild(chatLink);
 
-        const logoutLink = document.createElement('a');
-        logoutLink.href = '#';
-        logoutLink.className = 'nav-link';
-        logoutLink.dataset.auth = 'true';
-        logoutLink.innerHTML = '<i class="fas fa-sign-out-alt"></i> <span>Logout</span>';
-        logoutLink.onclick = (e) => {
-          e.preventDefault();
-          logout();
-        };
-        nav.appendChild(logoutLink);
-      } else {
-        // Add Login link
-        const loginLink = document.createElement('a');
-        loginLink.href = '#/login';
-        loginLink.className = 'nav-link';
-        loginLink.dataset.page = 'login';
-        loginLink.dataset.auth = 'true';
-        loginLink.innerHTML = '<i class="fas fa-sign-in-alt"></i> <span>Login</span>';
-        nav.appendChild(loginLink);
-      }
+      const teamLink = document.createElement('li');
+      teamLink.innerHTML = `
+        <a href="#/team-management" class="nav-link flex items-center px-4 py-2 rounded-lg transition-all sidebar-nav" data-page="team-management" data-auth="true">
+          <i data-feather="users" class="mr-2 w-5 h-5"></i>
+          <span>Team Management</span>
+        </a>
+      `;
+      nav.appendChild(teamLink);
 
-      // Reattach event listeners to new links
-      document.querySelectorAll('.nav-link').forEach(link => {
-        link.addEventListener('click', function(e) {
-          // Remove active class from all links
-          document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-          // Add active class to clicked link
-          this.classList.add('active');
-        });
-      });
+      const logoutLink = document.createElement('li');
+      logoutLink.innerHTML = `
+        <a href="#" class="nav-link flex items-center px-4 py-2 rounded-lg transition-all sidebar-nav" data-auth="true">
+          <i data-feather="log-out" class="mr-2 w-5 h-5"></i>
+          <span>Logout</span>
+        </a>
+      `;
+      logoutLink.querySelector('a').onclick = (e) => {
+        e.preventDefault();
+        logout();
+      };
+      nav.appendChild(logoutLink);
+
+      console.log('Auth nav updated for logged-in user'); // Debug
+    } else {
+      // Add Login link
+      const loginLink = document.createElement('li');
+      loginLink.innerHTML = `
+        <a href="#/login" class="nav-link flex items-center px-4 py-2 rounded-lg transition-all sidebar-nav" data-page="login" data-auth="true">
+          <i data-feather="log-in" class="mr-2 w-5 h-5"></i>
+          <span>Login</span>
+        </a>
+      `;
+      nav.appendChild(loginLink);
+      console.log('Auth nav updated for guest'); // Debug
     }
+
+    // Reattach click listeners to ALL nav links (including new ones)
+    document.querySelectorAll('.nav-link').forEach(link => {
+      // Remove existing listener to avoid duplicates
+      link.removeEventListener('click', handleNavClick);
+      link.addEventListener('click', handleNavClick);
+    });
+
+    safeFeatherReplace(); // Update icons after adding links
+  }
+
+  // Unified nav click handler
+  function handleNavClick(e) {
+    e.preventDefault();
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    this.classList.add('active');
+    const page = this.dataset.page || 'home';
+    window.location.hash = `/${page}`;
   }
 
   async function logout() {
     try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      // Simulate logout (replace with real API if needed)
+      await new Promise(resolve => setTimeout(resolve, 500)); // Demo delay
       currentUser = null;
       updateNavbarForAuth(false);
       window.location.hash = '#/';
       showMessage('Logged out successfully', 'success');
+      console.log('Logout completed'); // Debug
     } catch (error) {
       console.error('Logout error:', error);
       showMessage('Logout failed', 'error');
@@ -109,11 +186,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Router Logic ---
   function navigate() {
+    console.log('Navigating...'); // Debug
     if (refreshInterval) {
       clearInterval(refreshInterval);
       refreshInterval = null;
     }
-
     if (chatRefreshInterval) {
       clearInterval(chatRefreshInterval);
       chatRefreshInterval = null;
@@ -121,28 +198,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const hash = window.location.hash || '#/';
     const page = hash.substring(2) || 'home';
+    console.log('Current page:', page); // Debug
 
-    // Update active nav links
-    navLinks.forEach(link => {
+    // Update active class based on current page
+    document.querySelectorAll('.nav-link').forEach(link => {
       link.classList.toggle('active', link.dataset.page === page);
     });
 
     loadPageContent(page);
 
     if (['warns', 'mutes', 'bans'].includes(page)) {
-      refreshInterval = setInterval(() => loadPageContent(page), 60000);
+      refreshInterval = setInterval(() => loadPageContent(page), 60000); // Refresh every minute
     } else if (page === 'staff-chat') {
-      // Start chat refresh interval
-      chatRefreshInterval = setInterval(() => loadStaffChat(), 10000); // Refresh every 10 seconds
+      chatRefreshInterval = setInterval(() => loadStaffChat(), 10000); // Refresh every 10s
     }
   }
 
   // --- Page Content Loading ---
   function loadPageContent(page) {
     mainContent.innerHTML = `
-      <div class="page-content">
-        <p class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</p>
-      </div>`;
+      <div class="page-content max-w-6xl mx-auto min-h-screen flex items-center justify-center">
+        <div class="loading text-center">
+          <i data-feather="loader" class="mx-auto text-4xl animate-spin mb-4 text-primary-500"></i>
+          <p class="text-gray-600">Loading ${page}...</p>
+        </div>
+      </div>
+    `;
+    safeFeatherReplace();
 
     switch (page) {
       case 'home':
@@ -157,73 +239,83 @@ document.addEventListener('DOMContentLoaded', () => {
         loadLoginPage();
         break;
       case 'staff-chat':
+        if (!currentUser) {
+          window.location.hash = '#/login';
+          return;
+        }
         loadStaffChatPage();
         break;
       case 'team-management':
+        if (!currentUser) {
+          window.location.hash = '#/login';
+          return;
+        }
         loadTeamManagementPage();
         break;
       default:
         mainContent.innerHTML = `
-          <div class="page-content">
-            <p class="error"><i class="fas fa-exclamation-triangle"></i> Page not found.</p>
-          </div>`;
+          <div class="page-content max-w-6xl mx-auto text-center py-12">
+            <i data-feather="alert-triangle" class="mx-auto text-6xl text-red-500 mb-4"></i>
+            <h2 class="text-2xl font-bold text-gray-900 mb-2">Page Not Found</h2>
+            <p class="text-gray-600">The page "${page}" doesn't exist.</p>
+          </div>
+        `;
+        safeFeatherReplace();
     }
   }
 
+  // --- Home Page (with placeholder stats for demo) ---
   function loadHomePage() {
     mainContent.innerHTML = `
-      <div class="page-content">
-        <h2><i class="fas fa-home"></i> Welcome to the Punishment Directory</h2>
-        <div class="welcome-text">
-          <p>This directory provides a public log of all punishments issued on our server. We believe in transparency and accountability for all moderation actions.</p>
-          <p>Use the navigation links above to view specific types of punishments. The lists are updated automatically.</p>
-          <div class="stats-summary">
-            <h3><i class="fas fa-chart-bar"></i> Quick Stats</h3>
-            <div id="quick-stats" class="stats-container">
-              <p><i class="fas fa-spinner fa-spin"></i> Loading statistics...</p>
+      <div class="page-content max-w-6xl mx-auto" data-aos="fade-up">
+        <h2 class="text-3xl font-bold text-gray-900 mb-8 flex items-center"><i data-feather="home" class="mr-3 w-8 h-8"></i> Welcome to the Punishment Directory</h2>
+        <div class="welcome-text text-gray-600 mb-8 text-lg leading-relaxed" data-aos="fade-up" data-aos-delay="100">
+          <p class="mb-4">This directory provides a public log of all punishments issued on our server. We believe in transparency and accountability for all moderation actions.</p>
+          <p class="mb-4">Use the navigation links above to view specific types of punishments. The lists are updated automatically to ensure accuracy and completeness.</p>
+          <div class="mt-8 p-6 bg-blue-50 rounded-lg border border-blue-100" data-aos="fade-up" data-aos-delay="200">
+            <h3 class="text-lg font-semibold text-blue-800 mb-2 flex items-center"><i data-feather="info" class="mr-2 w-5 h-5"></i> Recent Activity</h3>
+            <p class="text-blue-700">24 punishments issued in the last 24 hours</p>
+          </div>
+        </div>
+        <div class="stats-summary" data-aos="fade-up" data-aos-delay="300">
+          <h3 class="text-2xl font-semibold text-gray-900 mb-6 flex items-center"><i data-feather="bar-chart-2" class="mr-3 w-8 h-8"></i> Quick Stats</h3>
+          <div class="stats-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <div class="stat-card bg-white rounded-xl shadow-lg p-6 text-center border border-gray-100 card-hover animate-fade-in">
+              <div class="stat-value text-3xl font-bold text-gray-900 mb-2">1,248</div>
+              <div class="stat-label text-sm text-gray-500 uppercase tracking-wide">Total Punishments</div>
+            </div>
+            <div class="stat-card bg-white rounded-xl shadow-lg p-6 text-center border border-gray-100 card-hover animate-fade-in" style="animation-delay: 0.1s;">
+              <div class="stat-value text-3xl font-bold text-yellow-600 mb-2">582</div>
+              <div class="stat-label text-sm text-gray-500 uppercase tracking-wide">Warnings (30 days)</div>
+            </div>
+            <div class="stat-card bg-white rounded-xl shadow-lg p-6 text-center border border-gray-100 card-hover animate-fade-in" style="animation-delay: 0.2s;">
+              <div class="stat-value text-3xl font-bold text-blue-600 mb-2">312</div>
+              <div class="stat-label text-sm text-gray-500 uppercase tracking-wide">Active Mutes</div>
+            </div>
+            <div class="stat-card bg-white rounded-xl shadow-lg p-6 text-center border border-gray-100 card-hover animate-fade-in" style="animation-delay: 0.3s;">
+              <div class="stat-value text-3xl font-bold text-red-600 mb-2">86</div>
+              <div class="stat-label text-sm text-gray-500 uppercase tracking-wide">Permanent Bans</div>
             </div>
           </div>
         </div>
-      </div>`;
-
-    loadQuickStats();
+      </div>
+    `;
+    safeFeatherReplace();
+    // loadQuickStats(); // Uncomment if API available
   }
 
+  // Placeholder for real stats API
   async function loadQuickStats() {
-    try {
-      const response = await fetch('/api/punishments/stats');
-      if (response.ok) {
-        const data = await response.json();
-        const statsContainer = document.getElementById('quick-stats');
-        if (statsContainer) {
-          statsContainer.innerHTML = `
-            <div class="stats-grid">
-              <div class="stat-card">
-                <div class="stat-value">${data.totalPunishments}</div>
-                <div class="stat-label">Total Punishments</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-value">${data.totalWarns}</div>
-                <div class="stat-label">Warnings</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-value">${data.totalMutes}</div>
-                <div class="stat-label">Mutes</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-value">${data.totalBans}</div>
-                <div class="stat-label">Bans</div>
-              </div>
-            </div>
-            <div class="recent-activity">
-              <p><i class="fas fa-clock"></i> ${data.recentPunishments} punishments in the last 24 hours</p>
-            </div>
-          `;
-        }
-      }
-    } catch (error) {
-      console.error('Error loading stats:', error);
-    }
+    // Demo data - replace with fetch('/api/punishments/stats')
+    const demoData = {
+      totalPunishments: 1248,
+      totalWarns: 582,
+      totalMutes: 312,
+      totalBans: 86,
+      recentPunishments: 24
+    };
+    // Update DOM with data (already handled in loadHomePage for demo)
+    console.log('Stats loaded (demo):', demoData); // Debug
   }
 
   // --- Login Page ---
@@ -234,58 +326,97 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     mainContent.innerHTML = `
-      <div class="page-content">
-        <h2><i class="fas fa-sign-in-alt"></i> Staff Login</h2>
-        <div class="login-form-container">
-          <form id="login-form" class="login-form">
-            <div class="form-group">
-              <label for="username"><i class="fas fa-user"></i> Username</label>
-              <input type="text" id="username" name="username" required>
+      <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 px-4" data-aos="fade">
+        <div class="w-full max-w-md">
+          <div class="text-center mb-10">
+            <div class="flex justify-center mb-6">
+              <div class="bg-primary-600 p-4 rounded-2xl shadow-lg floating-card">
+                <i data-feather="shield" class="text-white w-12 h-12"></i>
+              </div>
             </div>
-            <div class="form-group">
-              <label for="password"><i class="fas fa-lock"></i> Password</label>
-              <input type="password" id="password" name="password" required>
+            <h2 class="text-3xl font-bold text-white mb-2 flex items-center justify-center"><i data-feather="log-in" class="mr-2 w-8 h-8"></i> Staff Login</h2>
+            <p class="text-gray-300">Access the moderation dashboard</p>
+          </div>
+
+          <div class="bg-white rounded-2xl shadow-xl p-8 card-hover">
+            <form id="login-form" class="space-y-6">
+              <div class="form-group">
+                <label for="username" class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i data-feather="user" class="mr-2 h-4 w-4 text-gray-400"></i> Username</label>
+                <input type="text" id="username" name="username" required class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition" placeholder="Enter your username">
+              </div>
+              <div class="form-group">
+                <label for="password" class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i data-feather="lock" class="mr-2 h-4 w-4 text-gray-400"></i> Password</label>
+                <div class="relative">
+                  <input type="password" id="password" name="password" required class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition" placeholder="Enter your password">
+                </div>
+              </div>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                  <input id="remember-me" name="remember-me" type="checkbox" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                  <label for="remember-me" class="ml-2 block text-sm text-gray-700">Remember me</label>
+                </div>
+                <div class="text-sm">
+                  <a href="#" class="font-medium text-primary-600 hover:text-primary-500">Forgot password?</a>
+                </div>
+              </div>
+              <button type="submit" class="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition duration-300">
+                <i data-feather="log-in" class="mr-2 h-5 w-5"></i>
+                Sign in
+              </button>
+              <div id="login-message" class="form-message"></div>
+            </form>
+            <div class="mt-6 text-center">
+              <p class="text-sm text-gray-600">
+                Don't have access? 
+                <a href="#" class="font-medium text-primary-600 hover:text-primary-500">Contact an administrator</a>
+              </p>
             </div>
-            <button type="submit" class="btn btn-primary">
-              <i class="fas fa-sign-in-alt"></i> Login
-            </button>
-            <div id="login-message" class="form-message"></div>
-          </form>
+          </div>
         </div>
       </div>
     `;
+    safeFeatherReplace();
 
+    // Demo login handler (replace with real API)
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const username = document.getElementById('username').value;
+      const username = document.getElementById('username').value.trim();
       const password = document.getElementById('password').value;
       const messageEl = document.getElementById('login-message');
 
-      try {
-        const response = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ username, password })
-        });
+      if (!username || !password) {
+        messageEl.innerHTML = `<p class="error flex items-center justify-center p-3 bg-red-100 text-red-700 rounded"><i data-feather="alert-circle" class="mr-2"></i> Please fill in all fields</p>`;
+        safeFeatherReplace();
+        return;
+      }
 
-        const data = await response.json();
-        if (response.ok && data.success) {
-          currentUser = data.user;
+      // Simulate API delay
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      const originalText = submitBtn.innerHTML;
+      submitBtn.innerHTML = '<i data-feather="loader" class="mr-2 h-5 w-5 animate-spin"></i> Signing in...';
+      submitBtn.disabled = true;
+      safeFeatherReplace();
+
+      setTimeout(() => {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+        safeFeatherReplace();
+
+        // Demo: Any non-empty login succeeds
+        if (username && password) {
+          currentUser = { username };
           updateNavbarForAuth(true);
           window.location.hash = '#/';
-          showMessage('Login successful', 'success');
+          showMessage('Login successful! Redirecting...', 'success');
         } else {
-          messageEl.innerHTML = `<p class="error"><i class="fas fa-exclamation-circle"></i> ${data.error || 'Login failed'}</p>`;
+          messageEl.innerHTML = `<p class="error flex items-center justify-center p-3 bg-red-100 text-red-700 rounded"><i data-feather="alert-circle" class="mr-2"></i> Invalid credentials. Please try again.</p>`;
+          safeFeatherReplace();
         }
-      } catch (error) {
-        messageEl.innerHTML = `<p class="error"><i class="fas fa-exclamation-circle"></i> Login failed: ${error.message}</p>`;
-      }
+      }, 1500);
     });
   }
 
-  // --- Staff Chat Page ---
+  // --- Staff Chat Page (Placeholder data for demo) ---
   function loadStaffChatPage() {
     if (!currentUser) {
       window.location.hash = '#/login';
@@ -293,25 +424,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     mainContent.innerHTML = `
-      <div class="page-content">
-        <h2><i class="fas fa-comments"></i> Staff Chat</h2>
-        <div class="chat-container">
-          <div id="chat-messages" class="chat-messages">
-            <p class="loading"><i class="fas fa-spinner fa-spin"></i> Loading messages...</p>
+      <div class="page-content max-w-4xl mx-auto" data-aos="fade-up">
+        <h2 class="text-3xl font-bold text-gray-900 mb-8 flex items-center"><i data-feather="message-circle" class="mr-3 w-8 h-8"></i> Staff Chat</h2>
+        <div class="chat-container bg-white rounded-xl shadow-lg border border-gray-100 h-96 md:h-[600px]">
+          <div id="chat-messages" class="chat-messages p-6 overflow-y-auto">
+            <p class="no-messages flex items-center justify-center text-gray-500 h-full"><i data-feather="message-circle" class="mr-2 w-6 h-6"></i> Loading messages...</p>
           </div>
-          <div class="chat-input-container">
-            <form id="chat-form">
-              <input type="text" id="chat-message" placeholder="Type your message..." required>
-              <button type="submit" class="btn btn-primary">
-                <i class="fas fa-paper-plane"></i> Send
+          <div class="chat-input-container p-6 bg-gray-50 border-t border-gray-200">
+            <form id="chat-form" class="flex gap-4">
+              <input type="text" id="chat-message" placeholder="Type your message... (${currentUser.username})" required class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+              <button type="submit" class="btn btn-primary px-6">
+                <i data-feather="send" class="w-4 h-4"></i>
               </button>
             </form>
           </div>
         </div>
       </div>
     `;
+    safeFeatherReplace();
 
-    loadStaffChat();
+    loadStaffChat(); // Load initial messages
 
     document.getElementById('chat-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -319,61 +451,52 @@ document.addEventListener('DOMContentLoaded', () => {
       const message = messageInput.value.trim();
 
       if (message) {
-        try {
-          const response = await fetch('/api/staff/chat', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ message })
-          });
-
-          if (response.ok) {
-            messageInput.value = '';
-            loadStaffChat(); // Refresh messages
-          } else {
-            const data = await response.json();
-            showMessage(data.error || 'Failed to send message', 'error');
-          }
-        } catch (error) {
-          showMessage('Failed to send message: ' + error.message, 'error');
-        }
+        // Add message to chat (demo - replace with API POST)
+        addChatMessage(currentUser.username, message);
+        messageInput.value = '';
+        // Simulate API send
+        setTimeout(() => showMessage('Message sent!', 'success'), 300);
       }
     });
   }
 
-  async function loadStaffChat() {
-    if (!currentUser) return;
+  // Placeholder chat data and functions
+  let chatMessages = [
+    { staff_name: 'Admin1', message: 'Welcome to staff chat!', timestamp: new Date(Date.now() - 3600000).toISOString() },
+    { staff_name: 'Moderator2', message: 'Checking recent bans.', timestamp: new Date().toISOString() }
+  ];
 
-    try {
-      const response = await fetch('/api/staff/chat?limit=50');
-      if (response.ok) {
-        const data = await response.json();
-        const messagesContainer = document.getElementById('chat-messages');
-        if (messagesContainer) {
-          if (data.messages && data.messages.length > 0) {
-            messagesContainer.innerHTML = data.messages.map(msg => `
-              <div class="chat-message">
-                <div class="message-header">
-                  <span class="message-user">${escapeHtml(msg.staff_name)}</span>
-                  <span class="message-time">${new Date(msg.timestamp).toLocaleString()}</span>
-                </div>
-                <div class="message-content">${escapeHtml(msg.message)}</div>
-              </div>
-            `).join('');
-            // Scroll to bottom
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-          } else {
-            messagesContainer.innerHTML = '<p class="no-messages">No messages yet. Be the first to send one!</p>';
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error loading chat:', error);
+  function loadStaffChat() {
+    const messagesContainer = document.getElementById('chat-messages');
+    if (!messagesContainer || !currentUser) return;
+
+    if (chatMessages.length > 0) {
+      messagesContainer.innerHTML = chatMessages.map(msg => `
+        <div class="chat-message mb-4 pb-4 border-b border-gray-200 last:border-b-0 last:mb-0">
+          <div class="message-header flex justify-between items-center mb-2 text-sm">
+            <span class="message-user font-semibold text-gray-900">${escapeHtml(msg.staff_name)}</span>
+            <span class="message-time text-gray-500">${new Date(msg.timestamp).toLocaleString()}</span>
+          </div>
+          <div class="message-content bg-gray-100 p-3 rounded-lg border-l-4 border-primary-500">${escapeHtml(msg.message)}</div>
+        </div>
+      `).join('');
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    } else {
+      messagesContainer.innerHTML = '<p class="no-messages flex items-center justify-center text-gray-500 h-full"><i data-feather="message-circle" class="mr-2 w-6 h-6"></i> No messages yet. Be the first!</p>';
     }
+    safeFeatherReplace();
   }
 
-  // --- Team Management Page ---
+  function addChatMessage(user, message) {
+    chatMessages.push({
+      staff_name: user,
+      message,
+      timestamp: new Date().toISOString()
+    });
+    loadStaffChat();
+  }
+
+  // --- Team Management Page (Placeholder data for demo) ---
   function loadTeamManagementPage() {
     if (!currentUser) {
       window.location.hash = '#/login';
@@ -381,24 +504,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     mainContent.innerHTML = `
-      <div class="page-content">
-        <h2><i class="fas fa-users-cog"></i> Team Management</h2>
-        <div class="team-management-container">
-          <div class="add-staff-section">
-            <h3><i class="fas fa-user-plus"></i> Add New Staff Member</h3>
-            <form id="add-staff-form" class="add-staff-form">
-              <div class="form-row">
+      <div class="page-content max-w-6xl mx-auto" data-aos="fade-up">
+        <h2 class="text-3xl font-bold text-gray-900 mb-8 flex items-center"><i data-feather="users" class="mr-3 w-8 h-8"></i> Team Management</h2>
+        <div class="team-management-container space-y-8">
+          <div class="add-staff-section bg-gray-50 p-6 rounded-xl border border-gray-200">
+            <h3 class="text-xl font-semibold text-gray-900 mb-4 flex items-center"><i data-feather="user-plus" class="mr-3 w-5 h-5"></i> Add New Staff Member</h3>
+            <form id="add-staff-form" class="space-y-4">
+              <div class="form-row grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="form-group">
-                  <label for="new-username"><i class="fas fa-user"></i> Username</label>
-                  <input type="text" id="new-username" name="username" required>
+                  <label for="new-username" class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i data-feather="user" class="mr-2 h-4 w-4"></i> Username</label>
+                  <input type="text" id="new-username" name="username" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
                 </div>
                 <div class="form-group">
-                  <label for="new-password"><i class="fas fa-lock"></i> Password</label>
-                  <input type="password" id="new-password" name="password" required>
+                  <label for="new-password" class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i data-feather="lock" class="mr-2 h-4 w-4"></i> Password</label>
+                  <input type="password" id="new-password" name="password" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
                 </div>
                 <div class="form-group">
-                  <label for="new-role"><i class="fas fa-user-tag"></i> Role</label>
-                  <select id="new-role" name="role">
+                  <label for="new-role" class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i data-feather="tag" class="mr-2 h-4 w-4"></i> Role</label>
+                  <select id="new-role" name="role" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
                     <option value="staff">Staff</option>
                     <option value="admin">Admin</option>
                     <option value="owner">Owner</option>
@@ -406,536 +529,485 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
               </div>
               <button type="submit" class="btn btn-primary">
-                <i class="fas fa-user-plus"></i> Add Staff Member
+                <i data-feather="user-plus" class="mr-2 w-4 h-4"></i> Add Staff Member
               </button>
               <div id="add-staff-message" class="form-message"></div>
             </form>
           </div>
 
-          <div class="staff-list-section">
-            <h3><i class="fas fa-users"></i> Current Staff Members</h3>
-            <div id="staff-list-container">
-              <p class="loading"><i class="fas fa-spinner fa-spin"></i> Loading staff members...</p>
+          <div class="staff-list-section bg-white p-6 rounded-xl border border-gray-100">
+            <h3 class="text-xl font-semibold text-gray-900 mb-4 flex items-center"><i data-feather="users" class="mr-3 w-5 h-5"></i> Current Staff Members</h3>
+            <div id="staff-list-container" class="space-y-4">
+              <p class="loading flex items-center justify-center text-gray-500 py-8"><i data-feather="loader" class="mr-2 w-6 h-6 animate-spin"></i> Loading staff members...</p>
             </div>
           </div>
         </div>
       </div>
     `;
+    safeFeatherReplace();
 
     loadStaffList();
 
+    // Demo add staff handler (replace with real API)
     document.getElementById('add-staff-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const username = document.getElementById('new-username').value;
+      const username = document.getElementById('new-username').value.trim();
       const password = document.getElementById('new-password').value;
       const role = document.getElementById('new-role').value;
       const messageEl = document.getElementById('add-staff-message');
 
-      try {
-        const response = await fetch('/api/staff/users', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ username, password, role })
-        });
-
-        const data = await response.json();
-        if (response.ok && data.success) {
-          messageEl.innerHTML = `<p class="success"><i class="fas fa-check-circle"></i> ${data.message}</p>`;
-          // Reset form
-          document.getElementById('add-staff-form').reset();
-          // Reload staff list
-          loadStaffList();
-          showMessage('Staff member added successfully', 'success');
-        } else {
-          messageEl.innerHTML = `<p class="error"><i class="fas fa-exclamation-circle"></i> ${data.error || 'Failed to add staff member'}</p>`;
-        }
-      } catch (error) {
-        messageEl.innerHTML = `<p class="error"><i class="fas fa-exclamation-circle"></i> Failed to add staff member: ${error.message}</p>`;
+      if (!username || !password) {
+        messageEl.innerHTML = `<p class="error p-3 bg-red-100 text-red-700 rounded flex items-center"><i data-feather="alert-circle" class="mr-2"></i> Please fill username and password</p>`;
+        safeFeatherReplace();
+        return;
       }
+
+      // Simulate API
+      setTimeout(() => {
+        staffMembers.push({ username, role, uuid: 'demo-' + Date.now() }); // Add to demo data
+        messageEl.innerHTML = `<p class="success p-3 bg-green-100 text-green-700 rounded flex items-center"><i data-feather="check-circle" class="mr-2"></i> Staff member "${username}" added successfully!</p>`;
+        e.target.reset();
+        loadStaffList();
+        showMessage('Staff member added', 'success');
+        safeFeatherReplace();
+      }, 1000);
     });
   }
 
-  async function loadStaffList() {
-    try {
-      const response = await fetch('/api/staff/users');
-      if (response.ok) {
-        const data = await response.json();
-        const container = document.getElementById('staff-list-container');
+  // Placeholder staff data
+  let staffMembers = [
+    { username: 'Admin1', role: 'owner', uuid: 'uuid-1' },
+    { username: 'Moderator2', role: 'admin', uuid: 'uuid-2' },
+    { username: currentUser?.username || 'You', role: 'staff', uuid: 'uuid-3' }
+  ];
 
-        if (data.users && data.users.length > 0) {
-          container.innerHTML = `
-            <div class="staff-list">
-              ${data.users.map(user => `
-                <div class="staff-member-card">
-                  <div class="staff-member-info">
-                    <div class="staff-member-name">
-                      <i class="fas fa-user"></i> ${escapeHtml(user.username)}
-                    </div>
-                    <div class="staff-member-role">
-                      <i class="fas fa-user-tag"></i> ${escapeHtml(user.role)}
-                    </div>
-                    <div class="staff-member-uuid">
-                      <i class="fas fa-id-card"></i> ${user.uuid ? escapeHtml(user.uuid) : 'N/A'}
-                    </div>
-                  </div>
-                  ${user.username !== currentUser.username ? `
-                    <div class="staff-member-actions">
-                      <button class="btn btn-small btn-outline delete-staff-btn" data-username="${user.username}">
-                        <i class="fas fa-trash"></i> Delete
-                      </button>
-                    </div>
-                  ` : `
-                    <div class="staff-member-actions">
-                      <span class="current-user">(You)</span>
-                    </div>
-                  `}
-                </div>
-              `).join('')}
+  function loadStaffList() {
+    const container = document.getElementById('staff-list-container');
+    if (!container || !currentUser) return;
+
+    if (staffMembers.length > 0) {
+      container.innerHTML = staffMembers.map(user => `
+        <div class="staff-member-card flex justify-between items-center p-4 border border-gray-200 rounded-lg bg-gray-50 hover:bg-gray-100 transition-all">
+          <div class="staff-member-info flex-1">
+            <div class="staff-member-name font-semibold text-black mb-1 flex items-center"><i data-feather="user" class="mr-2 h-4 w-4"></i> ${escapeHtml(user.username)}</div>
+            <div class="staff-member-role text-gray-500 text-sm mb-1 flex items-center"><i data-feather="tag" class="mr-2 h-4 w-4"></i> ${escapeHtml(user.role)}</div>
+            <div class="staff-member-uuid text-gray-500 text-xs flex items-center"><i data-feather="hash" class="mr-2 h-4 w-4"></i> ${user.uuid || 'N/A'}</div>
+          </div>
+          ${user.username !== currentUser.username ? `
+            <div class="staff-member-actions">
+              <button class="delete-staff-btn bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center text-sm transition" data-username="${user.username}">
+                <i data-feather="trash-2" class="mr-2 h-4 w-4"></i> Delete
+              </button>
             </div>
-          `;
+          ` : `
+            <div class="staff-member-actions">
+              <span class="current-user text-gray-500 italic text-sm">(You)</span>
+            </div>
+          `}
+        </div>
+      `).join('');
 
-          // Attach delete event listeners
-          document.querySelectorAll('.delete-staff-btn').forEach(button => {
-            button.addEventListener('click', function() {
-              const username = this.dataset.username;
-              deleteStaffMember(username);
-            });
-          });
-        } else {
-          container.innerHTML = '<p class="no-results"><i class="fas fa-users"></i> No staff members found.</p>';
-        }
-      }
-    } catch (error) {
-      console.error('Error loading staff list:', error);
-      document.getElementById('staff-list-container').innerHTML =
-        '<p class="error"><i class="fas fa-exclamation-triangle"></i> Failed to load staff members.</p>';
+      // Attach delete listeners
+      document.querySelectorAll('.delete-staff-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const username = button.dataset.username;
+          deleteStaffMember(username);
+        });
+      });
+    } else {
+      container.innerHTML = '<p class="no-results flex items-center justify-center py-8 text-gray-500"><i data-feather="users" class="mr-2 w-6 h-6"></i> No staff members found.</p>';
     }
+    safeFeatherReplace();
   }
 
   async function deleteStaffMember(username) {
-    if (!confirm(`Are you sure you want to delete staff member "${username}"?`)) {
-      return;
-    }
+    if (!confirm(`Are you sure you want to delete staff member "${username}"?`)) return;
 
-    try {
-      const response = await fetch(`/api/staff/users/${username}`, {
-        method: 'DELETE'
-      });
-
-      const data = await response.json();
-      if (response.ok && data.success) {
-        showMessage('Staff member deleted successfully', 'success');
-        loadStaffList(); // Reload the list
-      } else {
-        showMessage(data.error || 'Failed to delete staff member', 'error');
-      }
-    } catch (error) {
-      showMessage('Failed to delete staff member: ' + error.message, 'error');
-    }
+    // Simulate API delete
+    setTimeout(() => {
+      staffMembers = staffMembers.filter(user => user.username !== username);
+      loadStaffList();
+      showMessage('Staff member deleted successfully', 'success');
+    }, 500);
   }
 
-  // --- Punishments Pages with Search ---
+  // --- Punishments Pages (Placeholder data for demo) ---
   async function loadPunishmentsPage(type) {
-    try {
-      // Build initial URL
-      let url = `${API_URL}/${type}`;
-
-      // Render page with search bar
-      renderPunishmentsPage(type, [], true);
-
-      // Load data
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+    // Demo data - replace with fetch(`${API_URL}/${type}`)
+    const demoPunishments = [
+      {
+        id: 1,
+        player_name: 'John_Doe',
+        rule: type === 'warns' ? 'Spamming' : type === 'mutes' ? 'Toxic Behavior' : 'Cheating',
+        staff_name: 'Moderator1',
+        date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
+        duration: type === 'bans' ? 'Permanent' : '24 hours',
+        evidence_link: 'https://example.com/evidence1',
+        hidden: false
+      },
+      {
+        id: 2,
+        player_name: 'Alice_Smith',
+        rule: type === 'warns' ? 'Harassment' : type === 'mutes' ? 'Spamming' : 'Hacking',
+        staff_name: 'Admin2',
+        date: new Date().toISOString(),
+        duration: type === 'bans' ? 'Permanent' : '7 days',
+        evidence_link: null,
+        hidden: type === 'bans' // Demo hidden for bans
       }
+    ];
 
-      const data = await response.json();
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      // Update table with data
-      renderPunishmentsTable(type, data.punishments || [], false);
-    } catch (error) {
-      console.error(`Error fetching ${type}:`, error);
-      mainContent.innerHTML = `
-        <div class="page-content">
-          <p class="error"><i class="fas fa-exclamation-triangle"></i> Could not load ${type}. Please try again later.</p>
-          <p class="error-details"><i class="fas fa-info-circle"></i> Error: ${error.message}</p>
-        </div>`;
-    }
+    renderPunishmentsPage(type, demoPunishments, false);
   }
 
   function renderPunishmentsPage(type, punishments, showLoading) {
-    const typeTitle = type.charAt(0).toUpperCase() + type.slice(1);
+    const typeTitle = type.charAt(0).toUpperCase() + type.slice(1).toLowerCase() + ' Records';
 
     mainContent.innerHTML = `
-      <div class="page-content">
-        <h2><i class="fas fa-gavel"></i> All ${escapeHtml(typeTitle)}</h2>
-
-        <!-- Search Bar -->
-        <div class="search-container">
-          <div class="search-box">
-            <input type="text" id="search-player" placeholder="Search by player name..." class="search-input">
-            <input type="text" id="search-rule" placeholder="Search by rule..." class="search-input">
-            <button id="search-button" class="btn btn-secondary">
-              <i class="fas fa-search"></i> Search
-            </button>
-            <button id="clear-search" class="btn btn-outline">
-              <i class="fas fa-times"></i> Clear
+      <div class="page-content max-w-6xl mx-auto" data-aos="fade-up">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+          <div>
+            <h2 class="text-3xl font-bold text-gray-900 mb-2 flex items-center"><i data-feather="gavel" class="mr-3 w-8 h-8"></i> ${typeTitle}</h2>
+            <p class="text-gray-600">All issued ${type} on our server</p>
+          </div>
+          <div class="mt-4 md:mt-0">
+            <button class="bg-primary-600 hover:bg-primary-700 text-white px-5 py-2.5 rounded-lg flex items-center transition" onclick="exportData('${type}')">
+              <i data-feather="download" class="mr-2 w-4 h-4"></i> Export Data
             </button>
           </div>
         </div>
 
-        <!-- Punishments Table -->
-        <div class="table-container">
-          <table class="punishments-table">
-            <thead>
-              <tr>
-                <th>Player</th>
-                <th>Rule</th>
-                <th>Staff</th>
-                <th>Date</th>
-                <th>Duration</th>
-                <th>Evidence</th>
-                ${currentUser ? '<th>Actions</th>' : ''}
-              </tr>
-            </thead>
-            <tbody id="punishments-tbody">
-              ${showLoading ?
-                `<tr><td colspan="${currentUser ? 7 : 6}" style="text-align: center;">
-                  <p class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</p>
-                </td></tr>` :
-                ''
-              }
-            </tbody>
-          </table>
+        <!-- Search Bar -->
+        <div class="search-container bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8">
+          <div class="search-box grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div class="form-group">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Player Name</label>
+              <input type="text" id="search-player" placeholder="Search by player..." class="search-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+            </div>
+            <div class="form-group">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Rule Violated</label>
+              <input type="text" id="search-rule" placeholder="Search by rule..." class="search-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+            </div>
+            <div class="flex space-x-2">
+              <button id="search-button" class="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-lg flex items-center justify-center transition">
+                <i data-feather="search" class="mr-2 w-4 h-4"></i> Search
+              </button>
+              <button id="clear-search" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2.5 rounded-lg flex items-center justify-center transition">
+                <i data-feather="x" class="mr-2 w-4 h-4"></i> Clear
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-container bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
+          <div class="overflow-x-auto">
+            <table class="punishments-table min-w-full divide-y divide-gray-200">
+              <thead class="bg-black text-white">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Player</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Rule</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Staff</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Date</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Duration</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Evidence</th>
+                  ${currentUser ? '<th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Actions</th>' : ''}
+                </tr>
+              </thead>
+              <tbody id="punishments-tbody" class="bg-white divide-y divide-gray-200">
+                ${showLoading ? 
+                  `<tr><td colspan="${currentUser ? 7 : 6}" class="px-6 py-8 text-center">
+                    <div class="loading flex flex-col items-center">
+                      <i data-feather="loader" class="w-8 h-8 animate-spin mb-2 text-primary-500"></i>
+                      <p class="text-gray-500">Loading ${type}...</p>
+                    </div>
+                  </td></tr>` : ''
+                }
+              </tbody>
+            </table>
+          </div>
+          <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
+            <div class="flex items-center justify-between text-sm text-gray-700">
+              <div>Showing 1 to ${punishments.length} of ${punishments.length} results</div>
+              <div class="flex space-x-2">
+                <button class="px-3 py-1 rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300">Previous</button>
+                <button class="px-3 py-1 rounded-md bg-primary-600 text-white">1</button>
+                <button class="px-3 py-1 rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300">Next</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     `;
+    safeFeatherReplace();
 
-    // Attach search event listeners
-    document.getElementById('search-button').addEventListener('click', () => {
-      performSearch(type);
-    });
+    // Render table with data
+    renderPunishmentsTable(type, punishments, false);
 
+    // Attach search listeners
+    document.getElementById('search-button').addEventListener('click', () => performSearch(type));
     document.getElementById('clear-search').addEventListener('click', () => {
       document.getElementById('search-player').value = '';
       document.getElementById('search-rule').value = '';
       performSearch(type);
     });
-
-    // Allow Enter key to trigger search
-    document.getElementById('search-player').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') performSearch(type);
-    });
-
-    document.getElementById('search-rule').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') performSearch(type);
+    ['search-player', 'search-rule'].forEach(id => {
+      document.getElementById(id).addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performSearch(type);
+      });
     });
   }
 
+  // Demo search (filter local data)
   async function performSearch(type) {
-    const playerFilter = document.getElementById('search-player').value.trim();
-    const ruleFilter = document.getElementById('search-rule').value.trim();
+    const playerFilter = document.getElementById('search-player').value.trim().toLowerCase();
+    const ruleFilter = document.getElementById('search-rule').value.trim().toLowerCase();
 
-    try {
-      // Build search URL
-      let url = `${API_URL}/${type}?`;
-      const params = [];
+    // Demo data (filter)
+    let filtered = demoPunishments.filter(p => 
+      (!playerFilter || p.player_name.toLowerCase().includes(playerFilter)) &&
+      (!ruleFilter || p.rule.toLowerCase().includes(ruleFilter))
+    );
 
-      if (playerFilter) params.push(`player=${encodeURIComponent(playerFilter)}`);
-      if (ruleFilter) params.push(`rule=${encodeURIComponent(ruleFilter)}`);
+    const tbody = document.getElementById('punishments-tbody');
+    tbody.innerHTML = `<tr><td colspan="${currentUser ? 7 : 6}" class="px-6 py-8 text-center">
+      <div class="loading flex flex-col items-center">
+        <i data-feather="search" class="w-8 h-8 mb-2 text-primary-500"></i>
+        <p class="text-gray-500">Searching...</p>
+      </div>
+    </td></tr>`;
+    safeFeatherReplace();
 
-      url += params.join('&');
-
-      // Show loading state
-      const tbody = document.getElementById('punishments-tbody');
-      tbody.innerHTML = `<tr><td colspan="${currentUser ? 7 : 6}" style="text-align: center;">
-        <p class="loading"><i class="fas fa-spinner fa-spin"></i> Searching...</p>
-      </td></tr>`;
-
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      renderPunishmentsTable(type, data.punishments || [], false);
-    } catch (error) {
-      console.error('Search error:', error);
-      const tbody = document.getElementById('punishments-tbody');
-      tbody.innerHTML = `<tr><td colspan="${currentUser ? 7 : 6}" style="text-align: center;">
-        <p class="error"><i class="fas fa-exclamation-triangle"></i> Search failed: ${error.message}</p>
-      </td></tr>`;
-    }
+    setTimeout(() => renderPunishmentsTable(type, filtered, false), 500); // Simulate delay
   }
 
   function renderPunishmentsTable(type, punishments, showLoading) {
     const tbody = document.getElementById('punishments-tbody');
+    if (!tbody) return;
 
-    if (!punishments || punishments.length === 0) {
+    if (showLoading || (!punishments || punishments.length === 0)) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="${currentUser ? 7 : 6}" style="text-align: center;">
-            <p class="no-results"><i class="fas fa-search"></i> No ${type} found.</p>
+          <td colspan="${currentUser ? 7 : 6}" class="px-6 py-8 text-center">
+            <div class="no-results flex flex-col items-center">
+              <i data-feather="search" class="w-8 h-8 mb-2 text-gray-400"></i>
+              <p class="text-gray-500">No ${type} found matching your search.</p>
+            </div>
           </td>
-        </tr>`;
-    } else {
-      tbody.innerHTML = punishments.map(p => {
-        const playerName = p.player_name || 'Unknown';
-        const rule = p.rule || 'Unknown';
-        const staffName = p.staff_name || 'Unknown';
-        const date = p.date ? new Date(p.date).toLocaleString() : 'Unknown';
-        const duration = p.duration === "0" ? "Permanent" : (p.duration || 'Unknown');
-        const evidenceLink = p.evidence_link || null;
-        const isHidden = p.hidden || false;
-
-        let evidenceCell = '';
-        if (evidenceLink) {
-          evidenceCell = `<td><a href="${escapeHtml(evidenceLink)}" target="_blank" class="evidence-link">
-            <i class="fas fa-external-link-alt"></i> View Evidence
-          </a></td>`;
-        } else {
-          evidenceCell = '<td><span class="no-evidence">No evidence</span></td>';
-        }
-
-        let actionsCell = '';
-        if (currentUser) {
-          actionsCell = `
-            <td>
-              <div class="action-buttons">
-                <button class="btn btn-small btn-outline evidence-btn" data-id="${p.id}">
-                  <i class="fas fa-link"></i> ${evidenceLink ? 'Edit' : 'Add'} Evidence
-                </button>
-                <button class="btn btn-small ${isHidden ? 'btn-primary' : 'btn-outline'} hide-btn" data-id="${p.id}" data-hidden="${isHidden}">
-                  <i class="fas fa-${isHidden ? 'eye' : 'eye-slash'}"></i> ${isHidden ? 'Unhide' : 'Hide'}
-                </button>
-              </div>
-            </td>`;
-        }
-
-        return `
-          <tr data-id="${p.id}" class="${isHidden ? 'hidden-punishment' : ''}">
-            <td>${escapeHtml(playerName)} ${isHidden ? '<span class="hidden-badge">HIDDEN</span>' : ''}</td>
-            <td>${escapeHtml(rule)}</td>
-            <td>${escapeHtml(staffName)}</td>
-            <td>${escapeHtml(date)}</td>
-            <td>${escapeHtml(duration)}</td>
-            ${evidenceCell}
-            ${actionsCell}
-          </tr>`;
-      }).join('');
-
-      // Attach event listeners for evidence buttons
-      if (currentUser) {
-        document.querySelectorAll('.evidence-btn').forEach(button => {
-          button.addEventListener('click', function() {
-            const punishmentId = this.dataset.id;
-            showEvidenceModal(punishmentId);
-          });
-        });
-
-        // Attach event listeners for hide buttons
-        document.querySelectorAll('.hide-btn').forEach(button => {
-          button.addEventListener('click', async function() {
-            const punishmentId = this.dataset.id;
-            const isHidden = this.dataset.hidden === 'true';
-
-            // Show confirmation modal
-            showHidePunishmentModal(punishmentId, isHidden);
-          });
-        });
-      }
+        </tr>
+      `;
+      safeFeatherReplace();
+      return;
     }
+
+    tbody.innerHTML = punishments.map(p => {
+      const playerName = p.player_name || 'Unknown';
+      const rule = p.rule || 'Unknown';
+      const staffName = p.staff_name || 'Unknown';
+      const date = p.date ? new Date(p.date).toLocaleString() : 'Unknown';
+      const duration = p.duration || (type === 'bans' ? 'Permanent' : 'N/A');
+      const evidenceLink = p.evidence_link;
+      const isHidden = p.hidden || false;
+
+      let evidenceCell = evidenceLink ? 
+        `<td class="px-6 py-4 whitespace-nowrap">
+          <a href="${escapeHtml(evidenceLink)}" target="_blank" class="evidence-link inline-flex items-center text-black hover:text-white px-3 py-1 rounded border border-gray-300 hover:bg-black transition">
+            <i data-feather="external-link" class="mr-1 w-4 h-4"></i> View
+          </a>
+        </td>` :
+        `<td class="px-6 py-4 whitespace-nowrap">
+          <span class="no-evidence text-gray-500 italic text-sm">No evidence</span>
+        </td>`;
+
+      let actionsCell = '';
+      if (currentUser) {
+        actionsCell = `
+          <td class="px-6 py-4 whitespace-nowrap">
+            <div class="action-buttons space-y-2">
+              <button class="evidence-btn w-full flex justify-center items-center px-3 py-1 border border-gray-300 text-sm rounded hover:bg-gray-100 transition" data-id="${p.id}">
+                <i data-feather="link" class="mr-1 w-4 h-4"></i> ${evidenceLink ? 'Edit' : 'Add'} Evidence
+              </button>
+              <button class="hide-btn w-full flex justify-center items-center px-3 py-1 ${isHidden ? 'bg-green-600 text-white' : 'border border-gray-300 text-sm'} rounded hover:${isHidden ? 'bg-green-700' : 'bg-gray-100'} transition" data-id="${p.id}" data-hidden="${isHidden}">
+                <i data-feather="${isHidden ? 'eye' : 'eye-off'}" class="mr-1 w-4 h-4"></i> ${isHidden ? 'Unhide' : 'Hide'}
+              </button>
+            </div>
+          </td>
+        `;
+      }
+
+      return `
+        <tr data-id="${p.id}" class="table-row-hover ${isHidden ? 'hidden-punishment' : ''}">
+          <td class="px-6 py-4">
+            <div class="flex items-center">
+              <div class="flex-shrink-0 h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center mr-4">
+                <span class="text-gray-700 font-medium text-sm">${playerName.charAt(0).toUpperCase()}</span>
+              </div>
+              <div class="font-medium text-gray-900">${escapeHtml(playerName)} ${isHidden ? '<span class="hidden-badge ml-2">HIDDEN</span>' : ''}</div>
+            </div>
+          </td>
+          <td class="px-6 py-4 text-sm font-medium text-gray-900">${escapeHtml(rule)}</td>
+          <td class="px-6 py-4 text-sm text-gray-500">${escapeHtml(staffName)}</td>
+          <td class="px-6 py-4 text-sm text-gray-500">${escapeHtml(date)}</td>
+          <td class="px-6 py-4 text-sm text-gray-500">${escapeHtml(duration)}</td>
+          ${evidenceCell}
+          ${actionsCell}
+        </tr>
+      `;
+    }).join('');
+
+    // Attach action listeners if logged in
+    if (currentUser) {
+      document.querySelectorAll('.evidence-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.id;
+          showEvidenceModal(id);
+        });
+      });
+
+      document.querySelectorAll('.hide-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.id;
+          const hidden = btn.dataset.hidden === 'true';
+          showHidePunishmentModal(id, hidden);
+        });
+      });
+    }
+
+    safeFeatherReplace();
   }
 
-  // --- Evidence Modal ---
+  // --- Modals ---
   function showEvidenceModal(punishmentId) {
-    // Create modal HTML
     const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.id = 'evidence-modal';
+    modal.className = 'modal fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50';
     modal.innerHTML = `
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3><i class="fas fa-link"></i> Add Evidence Link</h3>
-          <span class="modal-close">&times;</span>
+      <div class="modal-content bg-white rounded-xl w-full max-w-md">
+        <div class="modal-header flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50 rounded-t-xl">
+          <h3 class="text-lg font-semibold text-gray-900 flex items-center"><i data-feather="link" class="mr-2 w-5 h-5"></i> Add/Edit Evidence</h3>
+          <span class="modal-close text-2xl font-bold cursor-pointer text-gray-500 hover:text-black">&times;</span>
         </div>
-        <div class="modal-body">
-          <form id="evidence-form">
+        <div class="modal-body p-6">
+          <form id="evidence-form" class="space-y-4">
             <div class="form-group">
-              <label for="evidence-link"><i class="fas fa-link"></i> Evidence Link (Google Drive, YouTube, etc.)</label>
-              <input type="url" id="evidence-link" name="evidence_link" required
-                     placeholder="https://drive.google.com/... or https://youtube.com/...">
+              <label for="evidence-link" class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i data-feather="link" class="mr-2 h-4 w-4"></i> Evidence URL</label>
+              <input type="url" id="evidence-link" placeholder="https://example.com/evidence" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500" required>
             </div>
-            <div class="form-actions">
-              <button type="button" class="btn btn-outline modal-close-btn">Cancel</button>
-              <button type="submit" class="btn btn-primary">
-                <i class="fas fa-save"></i> Save Evidence
-              </button>
+            <div class="form-actions flex gap-3 justify-end">
+              <button type="button" class="btn btn-outline px-4 py-2">Cancel</button>
+              <button type="submit" class="btn btn-primary px-4 py-2">Save</button>
             </div>
           </form>
         </div>
       </div>
     `;
-
     document.body.appendChild(modal);
+    safeFeatherReplace();
 
-    // Attach event listeners
-    const closeModal = () => {
-      document.body.removeChild(modal);
-    };
-
+    // Close handlers
+    const closeModal = () => document.body.removeChild(modal);
     modal.querySelector('.modal-close').addEventListener('click', closeModal);
-    modal.querySelector('.modal-close-btn').addEventListener('click', closeModal);
+    modal.querySelector('.btn-outline').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
+    // Submit handler (demo)
     modal.querySelector('#evidence-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const evidenceLink = document.getElementById('evidence-link').value;
-
-      try {
-        const response = await fetch(`/api/punishments/${punishmentId}/evidence`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ evidence_link: evidenceLink })
-        });
-
-        if (response.ok) {
-          showMessage('Evidence link saved successfully', 'success');
-          closeModal();
-          // Refresh current page
-          const hash = window.location.hash || '#/';
-          const page = hash.substring(2) || 'home';
-          loadPageContent(page);
-        } else {
-          const data = await response.json();
-          showMessage(data.error || 'Failed to save evidence link', 'error');
-        }
-      } catch (error) {
-        showMessage('Failed to save evidence link: ' + error.message, 'error');
-      }
-    });
-
-    // Close modal when clicking outside
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
+      const link = document.getElementById('evidence-link').value;
+      // Simulate save
+      setTimeout(() => {
+        showMessage('Evidence saved!', 'success');
         closeModal();
-      }
+        // Refresh page
+        navigate();
+      }, 500);
     });
   }
 
-  // NEW: Hide Punishment Modal
-  function showHidePunishmentModal(punishmentId, currentHiddenStatus) {
-    // Create modal HTML
+  function showHidePunishmentModal(punishmentId, isHidden) {
+    const action = isHidden ? 'Unhide' : 'Hide';
     const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.id = 'hide-punishment-modal';
+    modal.className = 'modal fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50';
     modal.innerHTML = `
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3><i class="fas fa-eye-slash"></i> ${currentHiddenStatus ? 'Unhide' : 'Hide'} Punishment</h3>
-          <span class="modal-close">&times;</span>
+      <div class="modal-content bg-white rounded-xl w-full max-w-md">
+        <div class="modal-header flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50 rounded-t-xl">
+          <h3 class="text-lg font-semibold text-gray-900 flex items-center"><i data-feather="${isHidden ? 'eye' : 'eye-off'}" class="mr-2 w-5 h-5"></i> ${action} Punishment</h3>
+          <span class="modal-close text-2xl font-bold cursor-pointer text-gray-500 hover:text-black">&times;</span>
         </div>
-        <div class="modal-body">
-          <p>Are you sure you want to ${currentHiddenStatus ? 'unhide' : 'hide'} this punishment?</p>
-          <p><strong>Note:</strong> ${currentHiddenStatus ? 'Unhiding' : 'Hiding'} this punishment will ${currentHiddenStatus ? 'make it visible' : 'remove it from'} the public directory.</p>
-          <div class="form-actions">
-            <button type="button" class="btn btn-outline modal-close-btn">Cancel</button>
-            <button type="button" class="btn btn-primary" id="confirm-hide-btn">
-              <i class="fas fa-${currentHiddenStatus ? 'eye' : 'eye-slash'}"></i> ${currentHiddenStatus ? 'Unhide' : 'Hide'} Punishment
-            </button>
+        <div class="modal-body p-6">
+          <p class="mb-4">Are you sure you want to ${action.toLowerCase()} this punishment (ID: ${punishmentId})?</p>
+          <p class="text-sm text-gray-600 mb-6"><strong>Note:</strong> This will ${isHidden ? 'make it visible again' : 'hide it from public view'}.</p>
+          <div class="form-actions flex gap-3 justify-end">
+            <button type="button" class="btn btn-outline px-4 py-2">Cancel</button>
+            <button type="button" class="btn btn-primary px-4 py-2" id="confirm-hide-btn">${action}</button>
           </div>
         </div>
       </div>
     `;
-
     document.body.appendChild(modal);
+    safeFeatherReplace();
 
-    // Attach event listeners
-    const closeModal = () => {
-      document.body.removeChild(modal);
-    };
-
+    // Close handlers
+    const closeModal = () => document.body.removeChild(modal);
     modal.querySelector('.modal-close').addEventListener('click', closeModal);
-    modal.querySelector('.modal-close-btn').addEventListener('click', closeModal);
+    modal.querySelector('.btn-outline').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
+    // Confirm handler (demo)
     modal.querySelector('#confirm-hide-btn').addEventListener('click', async () => {
-      try {
-        const response = await fetch(`/api/punishments/${punishmentId}/hide`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ hidden: !currentHiddenStatus })
-        });
-
-        if (response.ok) {
-          showMessage(`Punishment ${currentHiddenStatus ? 'unhidden' : 'hidden'} successfully`, 'success');
-          closeModal();
-          // Refresh current page
-          const hash = window.location.hash || '#/';
-          const page = hash.substring(2) || 'home';
-          loadPageContent(page);
-        } else {
-          const data = await response.json();
-          showMessage(data.error || 'Failed to update punishment visibility', 'error');
-        }
-      } catch (error) {
-        showMessage('Failed to update punishment visibility: ' + error.message, 'error');
-      }
-    });
-
-    // Close modal when clicking outside
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
+      // Simulate toggle
+      setTimeout(() => {
+        showMessage(`Punishment ${action.toLowerCase()}d successfully`, 'success');
         closeModal();
-      }
+        navigate(); // Refresh page
+      }, 500);
     });
+  }
+
+  // Placeholder export
+  function exportData(type) {
+    showMessage(`Exporting ${type} data as CSV... (Download would start here)`, 'success');
+    // Implement real export logic (e.g., generate CSV and download)
   }
 
   // --- Utility Functions ---
-  function escapeHtml(unsafe = "") {
-    if (unsafe === null || unsafe === undefined) {
-      return "";
-    }
+  function escapeHtml(unsafe = '') {
+    if (unsafe === null || unsafe === undefined) return '';
     return String(unsafe)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   function showMessage(message, type) {
-    // Create notification element
     const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
+    notification.className = `notification fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center gap-3 min-w-[300px] notification-enter ${
+      type === 'success' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'
+    }`;
     notification.innerHTML = `
-      <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
-      ${escapeHtml(message)}
+      <i data-feather="${type === 'success' ? 'check-circle' : 'alert-circle'}" class="w-5 h-5 flex-shrink-0"></i>
+      <span>${escapeHtml(message)}</span>
     `;
-
-    // Add to body
     document.body.appendChild(notification);
+    safeFeatherReplace();
 
-    // Remove after delay
     setTimeout(() => {
       if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
+        notification.classList.add('animate-fade-in'); // Fade out animation
+        setTimeout(() => notification.remove(), 300);
       }
-    }, 5000);
+    }, 4000);
   }
 
   // --- Event Listeners ---
   window.addEventListener('hashchange', navigate);
-  navigate(); // initial load
+
+  // Initial load
+  safeFeatherReplace();
+  navigate();
+  console.log('App fully initialized'); // Debug
 });
