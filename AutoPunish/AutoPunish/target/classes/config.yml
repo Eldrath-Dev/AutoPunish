@@ -9,12 +9,6 @@ storage:
     username: "root"
     password: "password"
 
-# Admin web panel settings
-web-panel:
-  enabled: true
-  port: 8080
-  username: "admin"
-  password: "changeme123"  # Be sure to change this in production!
 
 # *** NEW: Public punishment directory settings ***
 public-web-panel:
