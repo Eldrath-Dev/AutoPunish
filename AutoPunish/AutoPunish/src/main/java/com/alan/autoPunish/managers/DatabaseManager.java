@@ -77,7 +77,7 @@ public class DatabaseManager {
         try (Statement statement = connection.createStatement()) {
             logger.info("Ensuring database tables exist...");
 
-            // Create punishments table with proper column sizes
+            // Create punishments table (may need migration)
             statement.execute(
                     "CREATE TABLE IF NOT EXISTS punishments (" +
                             "id VARCHAR(36) PRIMARY KEY, " +
