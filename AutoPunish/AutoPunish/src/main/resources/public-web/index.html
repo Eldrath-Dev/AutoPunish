@@ -171,49 +171,12 @@
                             <th class="py-3 px-6 text-left">Moderator</th>
                         </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-700">
-                        <tr class="hover:bg-gray-750 transition-colors">
-                            <td class="py-4 px-6">
-                                <div class="flex items-center">
-                                    <img src="http://static.photos/people/200x200/1" alt="User"
-                                         class="w-10 h-10 rounded-full mr-3">
-                                    <span>JohnDoe#1234</span>
-                                </div>
+                        <tbody id="recent-actions-tbody" class="divide-y divide-gray-700">
+                        <!-- Placeholder row for "No recent actions" message (initially) -->
+                        <tr id="no-recent-actions-row">
+                            <td colspan="5" class="py-4 px-6 text-center">
+                                No recent actions recorded.
                             </td>
-                            <td class="py-4 px-6"><span
-                                    class="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded">Warning</span>
-                            </td>
-                            <td class="py-4 px-6">Spamming</td>
-                            <td class="py-4 px-6">2 hours ago</td>
-                            <td class="py-4 px-6">ModBot</td>
-                        </tr>
-                        <tr class="hover:bg-gray-750 transition-colors">
-                            <td class="py-4 px-6">
-                                <div class="flex items-center">
-                                    <img src="http://static.photos/people/200x200/2" alt="User"
-                                         class="w-10 h-10 rounded-full mr-3">
-                                    <span>JaneSmith#5678</span>
-                                </div>
-                            </td>
-                            <td class="py-4 px-6"><span
-                                    class="px-2 py-1 bg-red-500/20 text-red-400 rounded">Ban</span></td>
-                            <td class="py-4 px-6">Harassment</td>
-                            <td class="py-4 px-6">1 day ago</td>
-                            <td class="py-4 px-6">AdminUser</td>
-                        </tr>
-                        <tr class="hover:bg-gray-750 transition-colors">
-                            <td class="py-4 px-6">
-                                <div class="flex items-center">
-                                    <img src="http://static.photos/people/200x200/3" alt="User"
-                                         class="w-10 h-10 rounded-full mr-3">
-                                    <span>MikeJohnson#9012</span>
-                                </div>
-                            </td>
-                            <td class="py-4 px-6"><span
-                                    class="px-2 py-1 bg-blue-500/20 text-blue-400 rounded">Mute</span></td>
-                            <td class="py-4 px-6">Trolling</td>
-                            <td class="py-4 px-6">3 days ago</td>
-                            <td class="py-4 px-6">ModBot</td>
                         </tr>
                         </tbody>
                     </table>
@@ -322,6 +285,49 @@
                     backgroundColor: 0x0f172a
                 });
             }
+
+            // Function to dynamically update recent actions table
+            function updateRecentActionsTable(actions) {
+                const tbody = document.getElementById('recent-actions-tbody');
+                const noActionsRow = document.getElementById('no-recent-actions-row'); // Get the "No recent actions" row
+
+                if (actions && actions.length > 0) {
+                    // Remove the "No recent actions" row if it exists
+                    if (noActionsRow) {
+                        tbody.removeChild(noActionsRow);
+                    }
+
+                    // Populate the table with action rows
+                    tbody.innerHTML = actions.map(action => `
+                        <tr class="hover:bg-gray-750 transition-colors">
+                            <td class="py-4 px-6">
+                                <div class="flex items-center">
+
+                                    <span>${action.user}</span>
+                                </div>
+                            </td>
+                            <td class="py-4 px-6">${action.action}</td>
+                            <td class="py-4 px-6">${action.reason}</td>
+                            <td class="py-4 px-6">${action.date}</td>
+                            <td class="py-4 px-6">${action.moderator}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    // If no recent actions, add the "No recent actions" row if it doesn't exist
+                    if (!noActionsRow) {
+                        tbody.innerHTML = `
+                            <tr id="no-recent-actions-row">
+                                <td colspan="5" class="py-4 px-6 text-center">
+                                    No recent actions recorded.
+                                </td>
+                            </tr>`;
+                    }
+                }
+            }
+
+            // Sample data (You'll replace this with actual data from your server)
+            const recentActionsData = []; // Intentionally empty array
+            updateRecentActionsTable(recentActionsData); // Call the function to render the table initially
 
         } catch (error) {
             console.error('Global init error:', error);

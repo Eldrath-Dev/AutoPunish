@@ -1036,7 +1036,67 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 5000);
     }
 
+    function updateRecentActionsTable(actions) {
+        const tbody = document.getElementById('recent-actions-tbody');
+        const noActionsRow = document.getElementById('no-recent-actions-row'); // Get the "No recent actions" row
+
+        if (actions && actions.length > 0) {
+            // Remove the "No recent actions" row if it exists
+            if (noActionsRow) {
+                tbody.removeChild(noActionsRow);
+            }
+
+            // Populate the table with action rows
+            tbody.innerHTML = actions.map(action => `
+                        <tr class="hover:bg-gray-750 transition-colors">
+                            <td class="py-4 px-6">
+                                <div class="flex items-center">
+
+                                    <span>${escapeHtml(action.user)}</span>
+                                </div>
+                            </td>
+                            <td class="py-4 px-6">${escapeHtml(action.action)}</td>
+                            <td class="py-4 px-6">${escapeHtml(action.reason)}</td>
+                            <td class="py-4 px-6">${escapeHtml(action.date)}</td>
+                            <td class="py-4 px-6">${escapeHtml(action.moderator)}</td>
+                        </tr>
+                    `).join('');
+        } else {
+            // If no recent actions, add the "No recent actions" row if it doesn't exist
+            if (!noActionsRow) {
+                tbody.innerHTML = `
+                            <tr id="no-recent-actions-row">
+                                <td colspan="5" class="py-4 px-6 text-center">
+                                    No recent actions recorded.
+                                </td>
+                            </tr>`;
+                safeFeatherReplace();
+            }
+        }
+    }
+
+    async function fetchRecentActions() {
+        try {
+            const response = await fetch('/api/recent-actions'); // Replace '/api/recent-actions' with your actual API endpoint
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            if (data && data.recentActions) {
+                updateRecentActionsTable(data.recentActions);
+            } else {
+                updateRecentActionsTable([]);
+            }
+        } catch (error) {
+            console.error('Error fetching recent actions:', error);
+            updateRecentActionsTable([]); // Show "No recent actions" message in case of an error
+        }
+        safeFeatherReplace();
+    }
+
     // --- Event Listeners ---
     window.addEventListener('hashchange', navigate);
     navigate(); // initial load
+
+    fetchRecentActions(); // Call the function initially
 });
