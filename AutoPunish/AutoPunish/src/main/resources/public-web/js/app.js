@@ -17,6 +17,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // NEW: Function to update the Community Moderation Stats section
+    async function updateCommunityStats() {
+        try {
+            const response = await fetch('/api/punishments/stats');
+            if (response.ok) {
+                const data = await response.json();
+
+                // Find the stats cards in the Community Moderation Stats section
+                const statsCards = document.querySelectorAll('.stats-card h3');
+
+                // Update each stat if the elements exist
+                if (statsCards.length >= 3) {
+                    // Total Warnings
+                    const totalWarningsElement = statsCards[0];
+                    totalWarningsElement.textContent = data.totalWarns?.toLocaleString() || '0';
+
+                    // Active Mutes
+                    const activeMutesElement = statsCards[1];
+                    activeMutesElement.textContent = data.activeMutes?.toLocaleString() || '0';
+
+                    // Permanent Bans
+                    const permanentBansElement = statsCards[2];
+                    permanentBansElement.textContent = data.totalBans?.toLocaleString() || '0';
+
+                    console.log('Community stats updated:', {
+                        warnings: data.totalWarns,
+                        activeMutes: data.activeMutes,
+                        bans: data.totalBans
+                    });
+                } else {
+                    console.warn('Could not find all stats cards to update');
+                }
+            } else {
+                console.error('Failed to fetch stats for community section:', response.status);
+            }
+        } catch (error) {
+            console.error('Error updating community stats:', error);
+            // Keep placeholders if API fails - don't break the UI
+        }
+    }
+
     const baseNav = document.querySelector('nav ul');
     if (baseNav) {
         baseNav.innerHTML = `
@@ -1096,7 +1137,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners ---
     window.addEventListener('hashchange', navigate);
-    navigate(); // initial load
 
-    fetchRecentActions(); // Call the function initially
+    // NEW: Initialize everything on page load
+    navigate(); // initial load
+    fetchRecentActions(); // Load recent actions
+    updateCommunityStats(); // NEW: Load community stats initially
+
+    // NEW: Set up periodic updates for community stats (every 5 minutes)
+    setInterval(() => {
+        updateCommunityStats();
+        fetchRecentActions(); // Also refresh recent actions periodically
+    }, 300000); // 5 minutes = 300,000 milliseconds
 });
