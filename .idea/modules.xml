@@ -3,7 +3,6 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/AutoPunish.iml" filepath="$PROJECT_DIR$/.idea/AutoPunish.iml" />
-      <module fileurl="file://$PROJECT_DIR$/AutoPunish/autopunish.iml" filepath="$PROJECT_DIR$/AutoPunish/autopunish.iml" />
     </modules>
   </component>
 </project>
