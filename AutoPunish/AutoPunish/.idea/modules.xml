@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/AutoPunish.iml" filepath="$PROJECT_DIR$/AutoPunish.iml" />
+      <module fileurl="file://$PROJECT_DIR$/autopunish.iml" filepath="$PROJECT_DIR$/autopunish.iml" />
     </modules>
   </component>
 </project>
