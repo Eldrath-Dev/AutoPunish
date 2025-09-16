@@ -1,24 +1,66 @@
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('DOM loaded, initializing app...');
-  const mainContent = document.getElementById('main-content');
-  const API_URL = '/api/punishments';
-  let refreshInterval;
-  let currentUser = null;
-  let chatRefreshInterval = null;
+    console.log('DOM loaded, initializing app...');
+    const mainContent = document.getElementById('main-content');
+    const API_URL = '/api/punishments';
+    let refreshInterval;
+    let currentUser = null;
+    let chatRefreshInterval = null;
+    let punishmentWebSocket = null; // NEW: WebSocket for real-time updates
 
-  function safeFeatherReplace() {
-    try {
-      if (typeof feather !== 'undefined') {
-        feather.replace();
-      }
-    } catch (error) {
-      console.error('Feather replace failed:', error);
+    function safeFeatherReplace() {
+        try {
+            if (typeof feather !== 'undefined') {
+                feather.replace();
+            }
+        } catch (error) {
+            console.error('Feather replace failed:', error);
+        }
     }
-  }
 
-  const baseNav = document.querySelector('nav ul');
-  if (baseNav) {
-    baseNav.innerHTML = `
+    // NEW: Function to update the Community Moderation Stats section
+    async function updateCommunityStats() {
+        try {
+            const response = await fetch('/api/punishments/stats');
+            if (response.ok) {
+                const data = await response.json();
+
+                // Find the stats cards in the Community Moderation Stats section
+                const statsCards = document.querySelectorAll('.stats-card h3');
+
+                // Update each stat if the elements exist
+                if (statsCards.length >= 3) {
+                    // Total Warnings
+                    const totalWarningsElement = statsCards[0];
+                    totalWarningsElement.textContent = data.totalWarns?.toLocaleString() || '0';
+
+                    // Active Mutes
+                    const activeMutesElement = statsCards[1];
+                    activeMutesElement.textContent = data.activeMutes?.toLocaleString() || '0';
+
+                    // Permanent Bans
+                    const permanentBansElement = statsCards[2];
+                    permanentBansElement.textContent = data.totalBans?.toLocaleString() || '0';
+
+                    console.log('Community stats updated:', {
+                        warnings: data.totalWarns,
+                        activeMutes: data.activeMutes,
+                        bans: data.totalBans
+                    });
+                } else {
+                    console.warn('Could not find all stats cards to update');
+                }
+            } else {
+                console.error('Failed to fetch stats for community section:', response.status);
+            }
+        } catch (error) {
+            console.error('Error updating community stats:', error);
+            // Keep placeholders if API fails - don't break the UI
+        }
+    }
+
+    const baseNav = document.querySelector('nav ul');
+    if (baseNav) {
+        baseNav.innerHTML = `
       <li>
         <a href="#/" class="nav-link active flex items-center px-4 py-2 rounded-lg transition-all sidebar-nav" data-page="home">
           <i data-feather="home" class="mr-2 w-5 h-5"></i>
@@ -44,319 +86,363 @@ document.addEventListener('DOMContentLoaded', () => {
         </a>
       </li>
     `;
-    safeFeatherReplace();
-  }
-
-  document.querySelectorAll('.nav-link').forEach(link => {
-    link.addEventListener('click', function(e) {
-      e.preventDefault();
-      document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-      this.classList.add('active');
-      const page = this.dataset.page || 'home';
-      window.location.hash = `/${page}`;
-    });
-  });
-
-  checkAuthStatus();
-
-  async function checkAuthStatus() {
-    try {
-      const response = await fetch('/api/auth/session');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.authenticated) {
-          currentUser = data.user;
-          updateNavbarForAuth(true);
-        } else {
-          currentUser = null;
-          updateNavbarForAuth(false);
-        }
-      }
-    } catch (error) {
-      console.error('Error checking auth status:', error);
-      currentUser = null;
-      updateNavbarForAuth(false);
+        safeFeatherReplace();
     }
-  }
 
-  function updateNavbarForAuth(isLoggedIn) {
-    const nav = document.querySelector('nav ul');
-    if (!nav) return;
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', function (e) {
+            e.preventDefault();
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            this.classList.add('active');
+            const page = this.dataset.page || 'home';
+            window.location.hash = `/${page}`;
+        });
+    });
 
-    // Remove existing auth-related links
-    const existingAuthLinks = nav.querySelectorAll('[data-auth]');
-    existingAuthLinks.forEach(link => link.remove());
+    checkAuthStatus();
 
-    if (isLoggedIn) {
-      // Add Staff Chat, Team Management, and Logout links
-      const chatLink = document.createElement('li');
-      chatLink.innerHTML = `
+    async function checkAuthStatus() {
+        try {
+            const response = await fetch('/api/auth/session');
+            if (response.ok) {
+                const data = await response.json();
+                if (data.authenticated) {
+                    currentUser = data.user;
+                    updateNavbarForAuth(true);
+                } else {
+                    currentUser = null;
+                    updateNavbarForAuth(false);
+                }
+            }
+        } catch (error) {
+            console.error('Error checking auth status:', error);
+            currentUser = null;
+            updateNavbarForAuth(false);
+        }
+    }
+
+    function updateNavbarForAuth(isLoggedIn) {
+        const nav = document.querySelector('nav ul');
+        if (!nav) return;
+
+        // Remove existing auth-related links
+        const existingAuthLinks = nav.querySelectorAll('[data-auth]');
+        existingAuthLinks.forEach(link => link.remove());
+
+        if (isLoggedIn) {
+            // Add Staff Chat, Team Management, and Logout links
+            const chatLink = document.createElement('li');
+            chatLink.innerHTML = `
         <a href="#/staff-chat" class="nav-link flex items-center px-4 py-2 rounded-lg transition-all sidebar-nav" data-page="staff-chat" data-auth="true">
           <i data-feather="message-circle" class="mr-2 w-5 h-5"></i> <span>Staff Chat</span>
         </a>
       `;
-      nav.appendChild(chatLink);
+            nav.appendChild(chatLink);
 
-      const teamLink = document.createElement('li');
-      teamLink.innerHTML = `
+            const teamLink = document.createElement('li');
+            teamLink.innerHTML = `
         <a href="#/team-management" class="nav-link flex items-center px-4 py-2 rounded-lg transition-all sidebar-nav" data-page="team-management" data-auth="true">
           <i data-feather="users-cog" class="mr-2 w-5 h-5"></i> <span>Team Management</span>
         </a>
       `;
-      nav.appendChild(teamLink);
+            nav.appendChild(teamLink);
 
-      const logoutLink = document.createElement('li');
-      logoutLink.innerHTML = `
+            const logoutLink = document.createElement('li');
+            logoutLink.innerHTML = `
         <a href="#" class="nav-link flex items-center px-4 py-2 rounded-lg transition-all sidebar-nav" data-auth="true">
           <i data-feather="log-out" class="mr-2 w-5 h-5"></i> <span>Logout</span>
         </a>
       `;
-      logoutLink.querySelector('a').onclick = (e) => {
-        e.preventDefault();
-        logout();
-      };
-      nav.appendChild(logoutLink);
-    } else {
-      // Add Login link
-      const loginLink = document.createElement('li');
-      loginLink.innerHTML = `
+            logoutLink.querySelector('a').onclick = (e) => {
+                e.preventDefault();
+                logout();
+            };
+            nav.appendChild(logoutLink);
+        } else {
+            // Add Login link
+            const loginLink = document.createElement('li');
+            loginLink.innerHTML = `
         <a href="#/login" class="nav-link flex items-center px-4 py-2 rounded-lg transition-all sidebar-nav" data-page="login" data-auth="true">
           <i data-feather="log-in" class="mr-2 w-5 h-5"></i> <span>Login</span>
         </a>
       `;
-      nav.appendChild(loginLink);
-    }
-
-    // Reattach event listeners to new links
-    document.querySelectorAll('.nav-link').forEach(link => {
-      link.addEventListener('click', function(e) {
-        // Remove active class from all links
-        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-        // Add active class to clicked link
-        this.classList.add('active');
-      });
-    });
-
-    safeFeatherReplace();
-  }
-
-  async function logout() {
-    try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
+            nav.appendChild(loginLink);
         }
-      });
-      currentUser = null;
-      updateNavbarForAuth(false);
-      window.location.hash = '#/';
-      showMessage('Logged out successfully', 'success');
-    } catch (error) {
-      console.error('Logout error:', error);
-      showMessage('Logout failed', 'error');
-    }
-  }
 
-  function navigate() {
-    if (refreshInterval) {
-      clearInterval(refreshInterval);
-      refreshInterval = null;
+        // Reattach event listeners to new links
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.removeEventListener('click', handleNavClick);
+            link.addEventListener('click', handleNavClick);
+        });
+
+        safeFeatherReplace();
     }
 
-    if (chatRefreshInterval) {
-      clearInterval(chatRefreshInterval);
-      chatRefreshInterval = null;
+    function handleNavClick(e) {
+        e.preventDefault();
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        this.classList.add('active');
+        const page = this.dataset.page || 'home';
+        window.location.hash = `/${page}`;
     }
 
-    const hash = window.location.hash || '#/';
-    const page = hash.substring(2) || 'home';
-
-    // Update active nav links
-    document.querySelectorAll('.nav-link').forEach(link => {
-      link.classList.toggle('active', link.dataset.page === page);
-    });
-
-    loadPageContent(page);
-
-    if (['warns', 'mutes', 'bans'].includes(page)) {
-      refreshInterval = setInterval(() => loadPageContent(page), 60000);
-    } else if (page === 'staff-chat') {
-      // Start chat refresh interval
-      chatRefreshInterval = setInterval(() => loadStaffChat(), 10000); // Refresh every 10 seconds
+    async function logout() {
+        try {
+            const response = await fetch('/api/auth/logout', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (response.ok) {
+                currentUser = null;
+                updateNavbarForAuth(false);
+                window.location.hash = '#/';
+                showMessage('Logged out successfully', 'success');
+            } else {
+                throw new Error('Logout failed');
+            }
+        } catch (error) {
+            console.error('Logout error:', error);
+            showMessage('Logout failed: ' + error.message, 'error');
+        }
     }
-  }
 
-  // --- Page Content Loading ---
-  function loadPageContent(page) {
-    mainContent.innerHTML = `
-      <div class="page-content">
-        <p class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</p>
-      </div>`;
+    function navigate() {
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+            refreshInterval = null;
+        }
+        if (chatRefreshInterval) {
+            clearInterval(chatRefreshInterval);
+            chatRefreshInterval = null;
+        }
 
-    switch (page) {
-      case 'home':
-        loadHomePage();
-        break;
-      case 'warns':
-      case 'mutes':
-      case 'bans':
-        loadPunishmentsPage(page);
-        break;
-      case 'login':
-        loadLoginPage();
-        break;
-      case 'staff-chat':
-        loadStaffChatPage();
-        break;
-      case 'team-management':
-        loadTeamManagementPage();
-        break;
-      default:
+        // Close WebSocket if open
+        if (punishmentWebSocket) {
+            punishmentWebSocket.close();
+            punishmentWebSocket = null;
+        }
+
+        const hash = window.location.hash || '#/';
+        const page = hash.substring(2) || 'home';
+
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.classList.toggle('active', link.dataset.page === page);
+        });
+
+        loadPageContent(page);
+
+        if (['warns', 'mutes', 'bans'].includes(page)) {
+            refreshInterval = setInterval(() => loadPageContent(page), 60000);
+        } else if (page === 'staff-chat') {
+            // Start chat refresh interval
+            chatRefreshInterval = setInterval(() => loadStaffChat(), 10000); // Refresh every 10 seconds
+        }
+    }
+
+    // --- Page Content Loading ---
+    function loadPageContent(page) {
         mainContent.innerHTML = `
-          <div class="page-content">
-            <p class="error"><i class="fas fa-exclamation-triangle"></i> Page not found.</p>
-          </div>`;
-    }
-  }
-
-  function loadHomePage() {
-    mainContent.innerHTML = `
       <div class="page-content">
-        <h2><i class="fas fa-home"></i> Welcome to the Punishment Directory</h2>
-        <div class="welcome-text">
-          <p>This directory provides a public log of all punishments issued on our server. We believe in transparency and accountability for all moderation actions.</p>
-          <p>Use the navigation links above to view specific types of punishments. The lists are updated automatically.</p>
-          <div class="stats-summary">
-            <h3><i class="fas fa-chart-bar"></i> Quick Stats</h3>
-            <div id="quick-stats" class="stats-container">
-              <p><i class="fas fa-spinner fa-spin"></i> Loading statistics...</p>
-            </div>
+        <p class="loading"><i data-feather="loader" class="mx-auto text-4xl animate-spin mb-4 text-primary-500"></i> Loading ${page}...</p>
+      </div>
+    `;
+        safeFeatherReplace();
+
+        switch (page) {
+            case 'home':
+                loadHomePage();
+                break;
+            case 'warns':
+            case 'mutes':
+            case 'bans':
+                loadPunishmentsPage(page);
+                break;
+            case 'login':
+                loadLoginPage();
+                break;
+            case 'staff-chat':
+                if (!currentUser) {
+                    window.location.hash = '#/login';
+                    return;
+                }
+                loadStaffChatPage();
+                break;
+            case 'team-management':
+                if (!currentUser) {
+                    window.location.hash = '#/login';
+                    return;
+                }
+                loadTeamManagementPage();
+                break;
+            default:
+                mainContent.innerHTML = `
+          <div class="page-content">
+            <p class="error"><i data-feather="alert-triangle" class="mx-auto text-6xl text-red-500 mb-4"></i> Page not found.</p>
+          </div>
+        `;
+                safeFeatherReplace();
+        }
+    }
+
+    function loadHomePage() {
+        mainContent.innerHTML = `
+      <div class="page-content max-w-6xl mx-auto" data-aos="fade-up">
+        <h2 class="text-3xl font-bold text-gray-900 mb-8 flex items-center"><i data-feather="home" class="mr-3 w-8 h-8"></i> Welcome to the Punishment Directory</h2>
+        <div class="welcome-text text-gray-600 mb-8 text-lg leading-relaxed" data-aos="fade-up" data-aos-delay="100">
+          <p class="mb-4">This directory provides a public log of all punishments issued on our server. We believe in transparency and accountability for all moderation actions.</p>
+          <p class="mb-4">Use the navigation links above to view specific types of punishments. The lists are updated automatically.</p>
+          <div class="mt-8 p-6 bg-blue-50 rounded-lg border border-blue-100" data-aos="fade-up" data-aos-delay="200">
+            <h3 class="text-lg font-semibold text-blue-800 mb-2 flex items-center"><i data-feather="info" class="mr-2 w-5 h-5"></i> Recent Activity</h3>
+            <p id="recent-activity" class="text-blue-700">Loading recent activity...</p>
           </div>
         </div>
-      </div>`;
-
-    loadQuickStats();
-  }
-
-  async function loadQuickStats() {
-    try {
-      const response = await fetch('/api/punishments/stats');
-      if (response.ok) {
-        const data = await response.json();
-        const statsContainer = document.getElementById('quick-stats');
-        if (statsContainer) {
-          statsContainer.innerHTML = `
-            <div class="stats-grid">
-              <div class="stat-card">
-                <div class="stat-value">${data.totalPunishments}</div>
-                <div class="stat-label">Total Punishments</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-value">${data.totalWarns}</div>
-                <div class="stat-label">Warnings</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-value">${data.totalMutes}</div>
-                <div class="stat-label">Mutes</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-value">${data.totalBans}</div>
-                <div class="stat-label">Bans</div>
-              </div>
-            </div>
-            <div class="recent-activity">
-              <p><i class="fas fa-clock"></i> ${data.recentPunishments} punishments in the last 24 hours</p>
-            </div>
-          `;
-        }
-      }
-    } catch (error) {
-      console.error('Error loading stats:', error);
-    }
-    safeFeatherReplace();
-  }
-
-  // --- Login Page ---
-  function loadLoginPage() {
-    if (currentUser) {
-      window.location.hash = '#/';
-      return;
-    }
-
-    mainContent.innerHTML = `
-      <div class="page-content">
-        <h2><i class="fas fa-sign-in-alt"></i> Staff Login</h2>
-        <div class="login-form-container">
-          <form id="login-form" class="login-form">
-            <div class="form-group">
-              <label for="username"><i class="fas fa-user"></i> Username</label>
-              <input type="text" id="username" name="username" required>
-            </div>
-            <div class="form-group">
-              <label for="password"><i class="fas fa-lock"></i> Password</label>
-              <input type="password" id="password" name="password" required>
-            </div>
-            <button type="submit" class="btn btn-primary">
-              <i class="fas fa-sign-in-alt"></i> Login
-            </button>
-            <div id="login-message" class="form-message"></div>
-          </form>
+        <div class="stats-summary" data-aos="fade-up" data-aos-delay="300">
+          <h3 class="text-2xl font-semibold text-gray-900 mb-6 flex items-center"><i data-feather="bar-chart-2" class="mr-3 w-8 h-8"></i> Quick Stats</h3>
+          <div id="quick-stats" class="stats-container">
+            <p><i data-feather="loader" class="mx-auto text-4xl animate-spin mb-4 text-primary-500"></i> Loading statistics...</p>
+          </div>
         </div>
       </div>
     `;
 
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
-      const messageEl = document.getElementById('login-message');
-
-      try {
-        const response = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ username, password })
-        });
-
-        const data = await response.json();
-        if (response.ok && data.success) {
-          currentUser = data.user;
-          updateNavbarForAuth(true);
-          window.location.hash = '#/';
-          showMessage('Login successful', 'success');
-        } else {
-          messageEl.innerHTML = `<p class="error"><i class="fas fa-exclamation-circle"></i> ${data.error || 'Login failed'}</p>`;
-        }
-      } catch (error) {
-        messageEl.innerHTML = `<p class="error"><i class="fas fa-exclamation-circle"></i> Login failed: ${error.message}</p>`;
-      }
-      safeFeatherReplace();
-    });
-    safeFeatherReplace();
-  }
-
-  // --- Staff Chat Page ---
-  function loadStaffChatPage() {
-    if (!currentUser) {
-      window.location.hash = '#/login';
-      return;
+        loadQuickStats();
+        safeFeatherReplace();
     }
 
-    mainContent.innerHTML = `
-      <div class="page-content">
-        <h2><i class="fas fa-comments"></i> Staff Chat</h2>
+    async function loadQuickStats() {
+        try {
+            const response = await fetch('/api/punishments/stats');
+            if (response.ok) {
+                const data = await response.json();
+                const statsContainer = document.getElementById('quick-stats');
+                if (statsContainer) {
+                    statsContainer.innerHTML = `
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-value text-3xl font-bold text-gray-900 mb-2">${data.totalPunishments}</div>
+                <div class="stat-label text-sm text-gray-500 uppercase tracking-wide">Total Punishments</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value text-3xl font-bold text-yellow-600 mb-2">${data.totalWarns}</div>
+                <div class="stat-label text-sm text-gray-500 uppercase tracking-wide">Warnings</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value text-3xl font-bold text-blue-600 mb-2">${data.totalMutes}</div>
+                <div class="stat-label text-sm text-gray-500 uppercase tracking-wide">Mutes</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value text-3xl font-bold text-red-600 mb-2">${data.totalBans}</div>
+                <div class="stat-label text-sm text-gray-500 uppercase tracking-wide">Bans</div>
+              </div>
+            </div>
+            <div class="recent-activity">
+              <p><i data-feather="clock" class="mr-2 w-5 h-5"></i> ${data.recentPunishments} punishments in the last 24 hours</p>
+            </div>
+          `;
+                }
+            }
+        } catch (error) {
+            console.error('Error loading stats:', error);
+        }
+        safeFeatherReplace();
+    }
+
+    // --- Login Page ---
+    function loadLoginPage() {
+        if (currentUser) {
+            window.location.hash = '#/';
+            return;
+        }
+
+        mainContent.innerHTML = `
+      <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 px-4">
+        <div class="w-full max-w-md">
+          <div class="text-center mb-10">
+            <div class="flex justify-center mb-6">
+              <div class="bg-primary-600 p-4 rounded-2xl shadow-lg floating-card">
+                <i data-feather="shield" class="text-white w-12 h-12"></i>
+              </div>
+            </div>
+            <h2 class="text-3xl font-bold text-white mb-2 flex items-center justify-center"><i data-feather="log-in" class="mr-2 w-8 h-8"></i> Staff Login</h2>
+            <p class="text-gray-300">Access the moderation dashboard</p>
+          </div>
+          <div class="bg-white rounded-2xl shadow-xl p-8 card-hover">
+            <form id="login-form" class="space-y-6">
+              <div class="form-group">
+                <label for="username" class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i data-feather="user" class="mr-2 h-4 w-4"></i> Username</label>
+                <input type="text" id="username" name="username" required class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+              </div>
+              <div class="form-group">
+                <label for="password" class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i data-feather="lock" class="mr-2 h-4 w-4"></i> Password</label>
+                <input type="password" id="password" name="password" required class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+              </div>
+              <button type="submit" class="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition duration-300">
+                <i data-feather="log-in" class="mr-2 h-5 w-5"></i>
+                Sign in
+              </button>
+              <div id="login-message" class="form-message"></div>
+            </form>
+          </div>
+        </div>
+      </div>
+    `;
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const messageEl = document.getElementById('login-message');
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username,
+                        password
+                    })
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    currentUser = data.user;
+                    updateNavbarForAuth(true);
+                    window.location.hash = '#/';
+                    showMessage('Login successful', 'success');
+                } else {
+                    messageEl.innerHTML = `<p class="error flex items-center justify-center"><i data-feather="alert-circle" class="mr-2"></i> ${data.error || 'Login failed'}</p>`;
+                }
+            } catch (error) {
+                messageEl.innerHTML = `<p class="error flex items-center justify-center"><i data-feather="alert-circle" class="mr-2"></i> Login failed: ${error.message}</p>`;
+            }
+            safeFeatherReplace();
+        });
+        safeFeatherReplace();
+    }
+
+    // --- Staff Chat Page ---
+    function loadStaffChatPage() {
+        if (!currentUser) {
+            window.location.hash = '#/login';
+            return;
+        }
+
+        mainContent.innerHTML = `
+      <div class="page-content max-w-4xl mx-auto" data-aos="fade-up">
+        <h2 class="text-3xl font-bold text-gray-900 mb-8 flex items-center"><i data-feather="message-circle" class="mr-3 w-8 h-8"></i> Staff Chat</h2>
         <div class="chat-container">
           <div id="chat-messages" class="chat-messages">
-            <p class="loading"><i class="fas fa-spinner fa-spin"></i> Loading messages...</p>
+            <p class="loading flex items-center justify-center text-gray-500"><i data-feather="loader" class="mr-2 animate-spin"></i> Loading messages...</p>
           </div>
           <div class="chat-input-container">
             <form id="chat-form">
-              <input type="text" id="chat-message" placeholder="Type your message..." required>
+              <input type="text" id="chat-message" placeholder="Type your message..." required class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
               <button type="submit" class="btn btn-primary">
-                <i class="fas fa-paper-plane"></i> Send
+                <i data-feather="send" class="mr-2 h-5 w-5"></i> Send
               </button>
             </form>
           </div>
@@ -364,97 +450,98 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `;
 
-    loadStaffChat();
+        loadStaffChat();
 
-    document.getElementById('chat-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const messageInput = document.getElementById('chat-message');
-      const message = messageInput.value.trim();
+        document.getElementById('chat-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const messageInput = document.getElementById('chat-message');
+            const message = messageInput.value.trim();
 
-      if (message) {
+            if (message) {
+                try {
+                    const response = await fetch('/api/staff/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message
+                        })
+                    });
+
+                    if (response.ok) {
+                        messageInput.value = '';
+                        loadStaffChat(); // Refresh messages
+                    } else {
+                        const data = await response.json();
+                        showMessage(data.error || 'Failed to send message', 'error');
+                    }
+                } catch (error) {
+                    showMessage('Failed to send message: ' + error.message, 'error');
+                }
+            }
+        });
+        safeFeatherReplace();
+    }
+
+    async function loadStaffChat() {
+        if (!currentUser) return;
+
         try {
-          const response = await fetch('/api/staff/chat', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ message })
-          });
-
-          if (response.ok) {
-            messageInput.value = '';
-            loadStaffChat(); // Refresh messages
-          } else {
-            const data = await response.json();
-            showMessage(data.error || 'Failed to send message', 'error');
-          }
-        } catch (error) {
-          showMessage('Failed to send message: ' + error.message, 'error');
-        }
-      }
-      safeFeatherReplace();
-    });
-    safeFeatherReplace();
-  }
-
-  async function loadStaffChat() {
-    if (!currentUser) return;
-
-    try {
-      const response = await fetch('/api/staff/chat?limit=50');
-      if (response.ok) {
-        const data = await response.json();
-        const messagesContainer = document.getElementById('chat-messages');
-        if (messagesContainer) {
-          if (data.messages && data.messages.length > 0) {
-            messagesContainer.innerHTML = data.messages.map(msg => `
+            const response = await fetch('/api/staff/chat?limit=50');
+            if (response.ok) {
+                const data = await response.json();
+                const messagesContainer = document.getElementById('chat-messages');
+                if (messagesContainer) {
+                    if (data.messages && data.messages.length > 0) {
+                        messagesContainer.innerHTML = data.messages.map(msg => `
               <div class="chat-message">
                 <div class="message-header">
-                  <span class="message-user">${escapeHtml(msg.staff_name)}</span>
-                  <span class="message-time">${new Date(msg.timestamp).toLocaleString()}</span>
+                  <span class="message-user font-semibold text-gray-900">${escapeHtml(msg.staff_name)}</span>
+                  <span class="message-time text-gray-500">${new Date(msg.timestamp).toLocaleString()}</span>
                 </div>
-                <div class="message-content">${escapeHtml(msg.message)}</div>
+                <div class="message-content bg-gray-100 p-4 rounded-lg border-l-4 border-black">${escapeHtml(msg.message)}</div>
               </div>
             `).join('');
-            // Scroll to bottom
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-          } else {
-            messagesContainer.innerHTML = '<p class="no-messages">No messages yet. Be the first to send one!</p>';
-          }
+                        // Scroll to bottom
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    } else {
+                        messagesContainer.innerHTML = '<p class="no-messages flex items-center justify-center"><i data-feather="message-circle" class="mr-2"></i> No messages yet. Be the first to send one!</p>';
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error loading chat:', error);
         }
-      }
-    } catch (error) {
-      console.error('Error loading chat:', error);
-    }
-    safeFeatherReplace();
-  }
-
-  // --- Team Management Page ---
-  function loadTeamManagementPage() {
-    if (!currentUser) {
-      window.location.hash = '#/login';
-      return;
+        safeFeatherReplace();
     }
 
-    mainContent.innerHTML = `
-      <div class="page-content">
-        <h2><i class="fas fa-users-cog"></i> Team Management</h2>
-        <div class="team-management-container">
-          <div class="add-staff-section">
-            <h3><i class="fas fa-user-plus"></i> Add New Staff Member</h3>
-            <form id="add-staff-form" class="add-staff-form">
-              <div class="form-row">
+    // --- Team Management Page ---
+    function loadTeamManagementPage() {
+        if (!currentUser) {
+            window.location.hash = '#/login';
+            return;
+        }
+
+        mainContent.innerHTML = `
+      <div class="page-content max-w-6xl mx-auto" data-aos="fade-up">
+        <h2 class="text-3xl font-bold text-gray-900 mb-8 flex items-center"><i data-feather="users-cog" class="mr-3 w-8 h-8"></i> Team Management</h2>
+        <div class="team-management-container space-y-8">
+          <div class="add-staff-section bg-gray-50 p-6 rounded-xl border border-gray-200">
+            <h3 class="text-xl font-semibold text-gray-900 mb-4 flex items-center"><i data-feather="user-plus" class="mr-3 w-5 h-5"></i> Add New Staff Member</h3>
+            <form id="add-staff-form" class="space-y-4">
+              <div class="form-row grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="form-group">
-                  <label for="new-username"><i class="fas fa-user"></i> Username</label>
-                  <input type="text" id="new-username" name="username" required>
+                  <label for="new-username" class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i data-feather="user" class="mr-2 h-4 w-4"></i> Username</label>
+                  <input type="text" id="new-username" name="username" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
                 </div>
                 <div class="form-group">
-                  <label for="new-password"><i class="fas fa-lock"></i> Password</label>
-                  <input type="password" id="new-password" name="password" required>
+                  <label for="new-password" class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i data-feather="lock" class="mr-2 h-4 w-4"></i> Password</label>
+                  <input type="password" id="new-password" name="password" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
                 </div>
                 <div class="form-group">
-                  <label for="new-role"><i class="fas fa-user-tag"></i> Role</label>
-                  <select id="new-role" name="role">
+                  <label for="new-role" class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i data-feather="tag" class="mr-2 h-4 w-4"></i> Role</label>
+                  <select id="new-role" name="role" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
                     <option value="staff">Staff</option>
                     <option value="admin">Admin</option>
                     <option value="owner">Owner</option>
@@ -462,416 +549,443 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
               </div>
               <button type="submit" class="btn btn-primary">
-                <i class="fas fa-user-plus"></i> Add Staff Member
+                <i data-feather="user-plus" class="mr-2 w-4 h-4"></i> Add Staff Member
               </button>
               <div id="add-staff-message" class="form-message"></div>
             </form>
           </div>
-
-          <div class="staff-list-section">
-            <h3><i class="fas fa-users"></i> Current Staff Members</h3>
+          <div class="staff-list-section bg-white p-6 rounded-xl border border-gray-100">
+            <h3 class="text-xl font-semibold text-gray-900 mb-4 flex items-center"><i data-feather="users" class="mr-3 w-5 h-5"></i> Current Staff Members</h3>
             <div id="staff-list-container">
-              <p class="loading"><i class="fas fa-spinner fa-spin"></i> Loading staff members...</p>
+              <p class="loading flex items-center justify-center"><i data-feather="loader" class="mr-2 animate-spin"></i> Loading staff members...</p>
             </div>
           </div>
         </div>
       </div>
     `;
 
-    loadStaffList();
+        loadStaffList();
 
-    document.getElementById('add-staff-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const username = document.getElementById('new-username').value;
-      const password = document.getElementById('new-password').value;
-      const role = document.getElementById('new-role').value;
-      const messageEl = document.getElementById('add-staff-message');
+        document.getElementById('add-staff-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('new-username').value;
+            const password = document.getElementById('new-password').value;
+            const role = document.getElementById('new-role').value;
+            const messageEl = document.getElementById('add-staff-message');
 
-      try {
-        const response = await fetch('/api/staff/users', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ username, password, role })
+            try {
+                const response = await fetch('/api/staff/users', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username,
+                        password,
+                        role
+                    })
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    messageEl.innerHTML = `<p class="success flex items-center"><i data-feather="check-circle" class="mr-2"></i> ${data.message}</p>`;
+                    document.getElementById('add-staff-form').reset();
+                    loadStaffList();
+                    showMessage('Staff member added successfully', 'success');
+                } else {
+                    messageEl.innerHTML = `<p class="error flex items-center"><i data-feather="alert-circle" class="mr-2"></i> ${data.error || 'Failed to add staff member'}</p>`;
+                }
+            } catch (error) {
+                messageEl.innerHTML = `<p class="error flex items-center"><i data-feather="alert-circle" class="mr-2"></i> Failed to add staff member: ${error.message}</p>`;
+            }
+            safeFeatherReplace();
         });
+        safeFeatherReplace();
+    }
 
-        const data = await response.json();
-        if (response.ok && data.success) {
-          messageEl.innerHTML = `<p class="success"><i class="fas fa-check-circle"></i> ${data.message}</p>`;
-          // Reset form
-          document.getElementById('add-staff-form').reset();
-          // Reload staff list
-          loadStaffList();
-          showMessage('Staff member added successfully', 'success');
-        } else {
-          messageEl.innerHTML = `<p class="error"><i class="fas fa-exclamation-circle"></i> ${data.error || 'Failed to add staff member'}</p>`;
-        }
-      } catch (error) {
-        messageEl.innerHTML = `<p class="error"><i class="fas fa-exclamation-circle"></i> Failed to add staff member: ${error.message}</p>`;
-      }
-      safeFeatherReplace();
-    });
-    safeFeatherReplace();
-  }
+    async function loadStaffList() {
+        try {
+            const response = await fetch('/api/staff/users');
+            if (response.ok) {
+                const data = await response.json();
+                const container = document.getElementById('staff-list-container');
 
-  async function loadStaffList() {
-    try {
-      const response = await fetch('/api/staff/users');
-      if (response.ok) {
-        const data = await response.json();
-        const container = document.getElementById('staff-list-container');
-
-        if (data.users && data.users.length > 0) {
-          container.innerHTML = `
-            <div class="staff-list">
-              ${data.users.map(user => `
-                <div class="staff-member-card">
-                  <div class="staff-member-info">
-                    <div class="staff-member-name">
-                      <i class="fas fa-user"></i> ${escapeHtml(user.username)}
-                    </div>
-                    <div class="staff-member-role">
-                      <i class="fas fa-user-tag"></i> ${escapeHtml(user.role)}
-                    </div>
-                    <div class="staff-member-uuid">
-                      <i class="fas fa-id-card"></i> ${user.uuid ? escapeHtml(user.uuid) : 'N/A'}
-                    </div>
-                  </div>
-                  ${user.username !== currentUser.username ? `
-                    <div class="staff-member-actions">
-                      <button class="btn btn-small btn-outline delete-staff-btn" data-username="${user.username}">
-                        <i class="fas fa-trash"></i> Delete
-                      </button>
-                    </div>
-                  ` : `
-                    <div class="staff-member-actions">
-                      <span class="current-user">(You)</span>
-                    </div>
-                  `}
+                if (data.users && data.users.length > 0) {
+                    container.innerHTML = data.users.map(user => `
+            <div class="staff-member-card flex justify-between items-center p-4 border border-gray-200 rounded-lg bg-gray-50 hover:bg-gray-100">
+              <div class="staff-member-info flex-1">
+                <div class="staff-member-name font-semibold text-black mb-1 flex items-center"><i data-feather="user" class="mr-2 h-4 w-4"></i> ${escapeHtml(user.username)}</div>
+                <div class="staff-member-role text-gray-500 text-sm mb-1 flex items-center"><i data-feather="tag" class="mr-2 h-4 w-4"></i> ${escapeHtml(user.role)}</div>
+                <div class="staff-member-uuid text-gray-500 text-xs flex items-center"><i data-feather="hash" class="mr-2 h-4 w-4"></i> ${user.uuid ? escapeHtml(user.uuid) : 'N/A'}</div>
+              </div>
+              ${user.username !== currentUser.username ? `
+                <div class="staff-member-actions">
+                  <button class="btn btn-small btn-outline delete-staff-btn bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded flex items-center" data-username="${user.username}">
+                    <i data-feather="trash-2" class="mr-1 h-4 w-4"></i> Delete
+                  </button>
                 </div>
-              `).join('')}
+              ` : `
+                <div class="staff-member-actions">
+                  <span class="current-user text-gray-500 italic text-sm">(You)</span>
+                </div>
+              `}
             </div>
-          `;
+          `).join('');
 
-          // Attach delete event listeners
-          document.querySelectorAll('.delete-staff-btn').forEach(button => {
-            button.addEventListener('click', function() {
-              const username = this.dataset.username;
-              deleteStaffMember(username);
-            });
-          });
-        } else {
-          container.innerHTML = '<p class="no-results"><i class="fas fa-users"></i> No staff members found.</p>';
+                    document.querySelectorAll('.delete-staff-btn').forEach(button => {
+                        button.addEventListener('click', function () {
+                            const username = this.dataset.username;
+                            deleteStaffMember(username);
+                        });
+                    });
+                } else {
+                    container.innerHTML = '<p class="no-results flex items-center justify-center"><i data-feather="users" class="mr-2"></i> No staff members found.</p>';
+                }
+            }
+        } catch (error) {
+            console.error('Error loading staff list:', error);
+            document.getElementById('staff-list-container').innerHTML =
+                '<p class="error flex items-center justify-center"><i data-feather="alert-triangle" class="mr-2"></i> Failed to load staff members.</p>';
         }
-      }
-    } catch (error) {
-      console.error('Error loading staff list:', error);
-      document.getElementById('staff-list-container').innerHTML =
-        '<p class="error"><i class="fas fa-exclamation-triangle"></i> Failed to load staff members.</p>';
-    }
-    safeFeatherReplace();
-  }
-
-  async function deleteStaffMember(username) {
-    if (!confirm(`Are you sure you want to delete staff member "${username}"?`)) {
-      return;
+        safeFeatherReplace();
     }
 
-    try {
-      const response = await fetch(`/api/staff/users/${username}`, {
-        method: 'DELETE'
-      });
+    async function deleteStaffMember(username) {
+        if (!confirm(`Are you sure you want to delete staff member "${username}"?`)) {
+            return;
+        }
 
-      const data = await response.json();
-      if (response.ok && data.success) {
-        showMessage('Staff member deleted successfully', 'success');
-        loadStaffList(); // Reload the list
-      } else {
-        showMessage(data.error || 'Failed to delete staff member', 'error');
-      }
-    } catch (error) {
-      showMessage('Failed to delete staff member: ' + error.message, 'error');
+        try {
+            const response = await fetch(`/api/staff/users/${username}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+            if (response.ok && data.success) {
+                showMessage('Staff member deleted successfully', 'success');
+                loadStaffList(); // Reload the list
+            } else {
+                showMessage(data.error || 'Failed to delete staff member', 'error');
+            }
+        } catch (error) {
+            showMessage('Failed to delete staff member: ' + error.message, 'error');
+        }
     }
-    safeFeatherReplace();
-  }
 
-  // --- Punishments Pages with Search ---
-  async function loadPunishmentsPage(type) {
-    try {
-      // Build initial URL
-      let url = `${API_URL}/${type}`;
+    // --- Punishments Pages with Search ---
+    async function loadPunishmentsPage(type) {
+        try {
+            // Build initial URL
+            let url = `${API_URL}/${type}`;
 
-      // Render page with search bar
-      renderPunishmentsPage(type, [], true);
+            // Render page with search bar
+            renderPunishmentsPage(type, [], true);
 
-      // Load data
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+            // Load data
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
 
-      const data = await response.json();
-      if (data.error) {
-        throw new Error(data.error);
-      }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error);
+            }
 
-      // Update table with data
-      renderPunishmentsTable(type, data.punishments || [], false);
-    } catch (error) {
-      console.error(`Error fetching ${type}:`, error);
-      mainContent.innerHTML = `
-        <div class="page-content">
-          <p class="error"><i class="fas fa-exclamation-triangle"></i> Could not load ${type}. Please try again later.</p>
-          <p class="error-details"><i class="fas fa-info-circle"></i> Error: ${error.message}</p>
+            // Update table with data
+            renderPunishmentsTable(type, data.punishments || [], false);
+        } catch (error) {
+            console.error(`Error fetching ${type}:`, error);
+            mainContent.innerHTML = `
+        <div class="page-content max-w-6xl mx-auto">
+          <p class="error flex items-center justify-center"><i data-feather="alert-triangle" class="mr-2"></i> Could not load ${type}. Please try again later.</p>
+          <p class="error-details flex items-center justify-center"><i data-feather="info-circle" class="mr-2"></i> Error: ${error.message}</p>
         </div>`;
+        }
+        safeFeatherReplace();
     }
-    safeFeatherReplace();
-  }
 
-  function renderPunishmentsPage(type, punishments, showLoading) {
-    const typeTitle = type.charAt(0).toUpperCase() + type.slice(1);
+    function renderPunishmentsPage(type, punishments, showLoading) {
+        const typeTitle = type.charAt(0).toUpperCase() + type.slice(1);
 
-    mainContent.innerHTML = `
-      <div class="page-content">
-        <h2><i class="fas fa-gavel"></i> All ${escapeHtml(typeTitle)}</h2>
+        mainContent.innerHTML = `
+      <div class="page-content max-w-6xl mx-auto" data-aos="fade-up">
+        <h2 class="text-3xl font-bold text-gray-900 mb-8 flex items-center"><i data-feather="gavel" class="mr-3 w-8 h-8"></i> All ${escapeHtml(typeTitle)}</h2>
 
         <!-- Search Bar -->
-        <div class="search-container">
-          <div class="search-box">
-            <input type="text" id="search-player" placeholder="Search by player name..." class="search-input">
-            <input type="text" id="search-rule" placeholder="Search by rule..." class="search-input">
-            <button id="search-button" class="btn btn-secondary">
-              <i class="fas fa-search"></i> Search
-            </button>
-            <button id="clear-search" class="btn btn-outline">
-              <i class="fas fa-times"></i> Clear
-            </button>
+        <div class="search-container bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8">
+          <div class="search-box grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div class="form-group">
+              <label class="block text-sm font-medium text-gray-700 mb-1 flex items-center"><i data-feather="user" class="mr-2 h-4 w-4"></i> Player Name</label>
+              <input type="text" id="search-player" placeholder="Search by player..." class="search-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+            </div>
+            <div class="form-group">
+              <label class="block text-sm font-medium text-gray-700 mb-1 flex items-center"><i data-feather="list" class="mr-2 h-4 w-4"></i> Rule</label>
+              <input type="text" id="search-rule" placeholder="Search by rule..." class="search-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+            </div>
+            <div class="flex space-x-2">
+              <button id="search-button" class="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-lg flex items-center justify-center transition">
+                <i data-feather="search" class="mr-2 w-4 h-4"></i> Search
+              </button>
+              <button id="clear-search" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2.5 rounded-lg flex items-center justify-center transition">
+                <i data-feather="x" class="mr-2 w-4 h-4"></i> Clear
+              </button>
+            </div>
           </div>
         </div>
 
         <!-- Punishments Table -->
-        <div class="table-container">
-          <table class="punishments-table">
-            <thead>
-              <tr>
-                <th>Player</th>
-                <th>Rule</th>
-                <th>Staff</th>
-                <th>Date</th>
-                <th>Duration</th>
-                <th>Evidence</th>
-                ${currentUser ? '<th>Actions</th>' : ''}
-              </tr>
-            </thead>
-            <tbody id="punishments-tbody">
-              ${showLoading ?
-                `<tr><td colspan="${currentUser ? 7 : 6}" style="text-align: center;">
-                  <p class="loading"><i class="fas fa-spinner fa-spin"></i> Loading...</p>
-                </td></tr>` :
-                ''
-              }
-            </tbody>
-          </table>
+        <div class="table-container bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
+          <div class="overflow-x-auto">
+            <table class="punishments-table min-w-full divide-y divide-gray-200">
+              <thead class="bg-black text-white">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Player</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Rule</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Staff</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Date</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Duration</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Evidence</th>
+                  ${currentUser ? '<th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Actions</th>' : ''}
+                </tr>
+              </thead>
+              <tbody id="punishments-tbody" class="bg-white divide-y divide-gray-200">
+                ${showLoading ?
+                        `<tr><td colspan="${currentUser ? 7 : 6}" class="px-6 py-4 text-center">
+                    <p class="loading flex items-center justify-center text-gray-500"><i data-feather="loader" class="mr-2 animate-spin"></i> Loading...</p>
+                  </td></tr>` :
+                        ''
+                    }
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     `;
 
-    // Attach search event listeners
-    document.getElementById('search-button').addEventListener('click', () => {
-      performSearch(type);
-    });
+        // Attach search event listeners
+        document.getElementById('search-button').addEventListener('click', () => {
+            performSearch(type);
+        });
 
-    document.getElementById('clear-search').addEventListener('click', () => {
-      document.getElementById('search-player').value = '';
-      document.getElementById('search-rule').value = '';
-      performSearch(type);
-    });
+        document.getElementById('clear-search').addEventListener('click', () => {
+            document.getElementById('search-player').value = '';
+            document.getElementById('search-rule').value = '';
+            performSearch(type);
+        });
 
-    // Allow Enter key to trigger search
-    document.getElementById('search-player').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') performSearch(type);
-    });
+        // Allow Enter key to trigger search
+        document.getElementById('search-player').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') performSearch(type);
+        });
 
-    document.getElementById('search-rule').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') performSearch(type);
-    });
+        document.getElementById('search-rule').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') performSearch(type);
+        });
 
-    safeFeatherReplace();
-  }
-
-  async function performSearch(type) {
-    const playerFilter = document.getElementById('search-player').value.trim();
-    const ruleFilter = document.getElementById('search-rule').value.trim();
-
-    try {
-      // Build search URL
-      let url = `${API_URL}/${type}?`;
-      const params = [];
-
-      if (playerFilter) params.push(`player=${encodeURIComponent(playerFilter)}`);
-      if (ruleFilter) params.push(`rule=${encodeURIComponent(ruleFilter)}`);
-
-      url += params.join('&');
-
-      // Show loading state
-      const tbody = document.getElementById('punishments-tbody');
-      tbody.innerHTML = `<tr><td colspan="${currentUser ? 7 : 6}" style="text-align: center;">
-        <p class="loading"><i class="fas fa-spinner fa-spin"></i> Searching...</p>
-      </td></tr>`;
-
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      renderPunishmentsTable(type, data.punishments || [], false);
-    } catch (error) {
-      console.error('Search error:', error);
-      const tbody = document.getElementById('punishments-tbody');
-      tbody.innerHTML = `<tr><td colspan="${currentUser ? 7 : 6}" style="text-align: center;">
-        <p class="error"><i class="fas fa-exclamation-triangle"></i> Search failed: ${error.message}</p>
-      </td></tr>`;
+        safeFeatherReplace();
     }
-    safeFeatherReplace();
-  }
 
-  function renderPunishmentsTable(type, punishments, showLoading) {
-    const tbody = document.getElementById('punishments-tbody');
+    async function performSearch(type) {
+        const playerFilter = document.getElementById('search-player').value.trim();
+        const ruleFilter = document.getElementById('search-rule').value.trim();
 
-    if (!punishments || punishments.length === 0) {
-      tbody.innerHTML = `
+        try {
+            // Build search URL
+            let url = `${API_URL}/${type}?`;
+            const params = [];
+
+            if (playerFilter) params.push(`player=${encodeURIComponent(playerFilter)}`);
+            if (ruleFilter) params.push(`rule=${encodeURIComponent(ruleFilter)}`);
+
+            url += params.join('&');
+
+            // Show loading state
+            const tbody = document.getElementById('punishments-tbody');
+            tbody.innerHTML = `<tr><td colspan="${currentUser ? 7 : 6}" class="px-6 py-4 text-center">
+        <p class="loading flex items-center justify-center text-gray-500"><i data-feather="loader" class="mr-2 animate-spin"></i> Searching...</p>
+      </td></tr>`;
+            safeFeatherReplace();
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            renderPunishmentsTable(type, data.punishments || [], false);
+        } catch (error) {
+            console.error('Search error:', error);
+            const tbody = document.getElementById('punishments-tbody');
+            tbody.innerHTML = `<tr><td colspan="${currentUser ? 7 : 6}" class="px-6 py-4 text-center">
+        <p class="error flex items-center justify-center"><i data-feather="alert-triangle" class="mr-2"></i> Search failed: ${error.message}</p>
+      </td></tr>`;
+        }
+        safeFeatherReplace();
+    }
+
+    function renderPunishmentsTable(type, punishments, showLoading) {
+        const tbody = document.getElementById('punishments-tbody');
+
+        if (showLoading) {
+            tbody.innerHTML = `<tr><td colspan="${currentUser ? 7 : 6}" class="px-6 py-4 text-center">
+        <p class="loading flex items-center justify-center text-gray-500"><i data-feather="loader" class="mr-2 animate-spin"></i> Loading...</p>
+      </td></tr>`;
+            safeFeatherReplace();
+            return;
+        }
+
+        if (!punishments || punishments.length === 0) {
+            tbody.innerHTML = `
         <tr>
-          <td colspan="${currentUser ? 7 : 6}" style="text-align: center;">
-            <p class="no-results"><i class="fas fa-search"></i> No ${type} found.</p>
+          <td colspan="${currentUser ? 7 : 6}" class="px-6 py-4 text-center">
+            <p class="no-results flex items-center justify-center"><i data-feather="search" class="mr-2"></i> No ${type} found.</p>
           </td>
         </tr>`;
-    } else {
-      // Filter hidden punishments for public view
-      const filteredPunishments = currentUser ? punishments : punishments.filter(p => !p.hidden);
-
-      tbody.innerHTML = filteredPunishments.map(p => {
-        const playerName = p.player_name || 'Unknown';
-        const rule = p.rule || 'Unknown';
-        const staffName = p.staff_name || 'Unknown';
-        const date = p.date ? new Date(p.date).toLocaleString() : 'Unknown';
-        const duration = p.duration === "0" ? "Permanent" : (p.duration || 'Unknown');
-        const evidenceLink = p.evidence_link || null;
-        const isHidden = p.hidden || false;
-
-        let evidenceCell = '';
-        if (evidenceLink) {
-          evidenceCell = `<td><a href="${escapeHtml(evidenceLink)}" target="_blank" class="evidence-link">
-            <i class="fas fa-external-link-alt"></i> View Evidence
-          </a></td>`;
         } else {
-          evidenceCell = '<td><span class="no-evidence">No evidence</span></td>';
-        }
+            // Filter hidden punishments for public view
+            const filteredPunishments = currentUser ? punishments : punishments.filter(p => !(p.hidden && !currentUser));
 
-        let actionsCell = '';
-        if (currentUser) {
-          actionsCell = `
-            <td>
-              <div class="action-buttons">
-                <button class="btn btn-small btn-outline evidence-btn" data-id="${p.id}">
-                  <i class="fas fa-link"></i> ${evidenceLink ? 'Edit' : 'Add'} Evidence
-                </button>
-                <button class="btn btn-small ${isHidden ? 'btn-primary' : 'btn-outline'} hide-btn" data-id="${p.id}" data-hidden="${isHidden}">
-                  <i class="fas fa-${isHidden ? 'eye' : 'eye-slash'}"></i> ${isHidden ? 'Unhide' : 'Hide'}
-                </button>
-              </div>
-            </td>`;
-        }
-
-        return `
-          <tr data-id="${p.id}" class="${isHidden ? 'hidden-punishment' : ''}">
-            <td>${escapeHtml(playerName)} ${isHidden ? '<span class="hidden-badge">HIDDEN</span>' : ''}</td>
-            <td>${escapeHtml(rule)}</td>
-            <td>${escapeHtml(staffName)}</td>
-            <td>${escapeHtml(date)}</td>
-            <td>${escapeHtml(duration)}</td>
-            ${evidenceCell}
-            ${actionsCell}
+            if (filteredPunishments.length === 0) {
+                tbody.innerHTML = `
+          <tr>
+            <td colspan="${currentUser ? 7 : 6}" class="px-6 py-4 text-center">
+              <p class="no-results flex items-center justify-center"><i data-feather="search" class="mr-2"></i> No visible ${type} found.</p>
+            </td>
           </tr>`;
-      }).join('');
+            } else {
+                tbody.innerHTML = filteredPunishments.map(p => {
+                    const playerName = p.player_name || 'Unknown';
+                    const rule = p.rule || 'Unknown';
+                    const staffName = p.staff_name || 'Unknown';
+                    const date = p.date ? new Date(p.date).toLocaleString() : 'Unknown';
+                    const duration = p.duration === "0" ? "Permanent" : (p.duration || 'Unknown');
+                    const evidenceLink = p.evidence_link || null;
+                    const isHidden = p.hidden || false;
 
-      // Attach event listeners for evidence buttons
-      if (currentUser) {
-        document.querySelectorAll('.evidence-btn').forEach(button => {
-          button.addEventListener('click', function() {
-            const punishmentId = this.dataset.id;
-            showEvidenceModal(punishmentId);
-          });
-        });
+                    let evidenceCell = '';
+                    if (evidenceLink) {
+                        evidenceCell = `<td class="px-6 py-4 whitespace-nowrap">
+              <a href="${escapeHtml(evidenceLink)}" target="_blank" class="evidence-link flex items-center">
+                <i data-feather="external-link" class="mr-1 w-4 h-4"></i> View Evidence
+              </a>
+            </td>`;
+                    } else {
+                        evidenceCell = '<td class="px-6 py-4 whitespace-nowrap"><span class="no-evidence text-gray-500 italic text-sm">No evidence</span></td>';
+                    }
 
-        // Attach event listeners for hide buttons
-        document.querySelectorAll('.hide-btn').forEach(button => {
-          button.addEventListener('click', async function() {
-            const punishmentId = this.dataset.id;
-            const isHidden = this.dataset.hidden === 'true';
-            togglePunishmentVisibility(punishmentId, !isHidden);
-          });
-        });
-      }
+                    let actionsCell = '';
+                    if (currentUser) {
+                        actionsCell = `
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="action-buttons space-y-2">
+                  <button class="btn btn-small btn-outline evidence-btn w-full flex justify-center" data-id="${p.id}">
+                    <i data-feather="link" class="mr-1 h-4 w-4"></i> ${evidenceLink ? 'Edit' : 'Add'} Evidence
+                  </button>
+                  <button class="btn btn-small ${isHidden ? 'btn-primary' : 'btn-outline'} hide-btn w-full flex justify-center" data-id="${p.id}" data-hidden="${isHidden}">
+                    <i data-feather="${isHidden ? 'eye' : 'eye-off'}" class="mr-1 h-4 w-4"></i> ${isHidden ? 'Unhide' : 'Hide'}
+                  </button>
+                </div>
+              </td>`;
+                    }
+
+                    return `
+            <tr data-id="${p.id}" class="table-row-hover ${isHidden ? 'hidden-punishment' : ''}">
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="flex items-center">
+                  <div class="flex-shrink-0 h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center mr-4">
+                    <span class="text-gray-700 font-medium">${playerName.charAt(0)}</span>
+                  </div>
+                  <div>${escapeHtml(playerName)} ${isHidden ? '<span class="hidden-badge">HIDDEN</span>' : ''}</div>
+                </div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${escapeHtml(rule)}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${escapeHtml(staffName)}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${escapeHtml(date)}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${escapeHtml(duration)}</td>
+              ${evidenceCell}
+              ${actionsCell}
+            </tr>`;
+                }).join('');
+
+                // Attach event listeners for evidence buttons
+                if (currentUser) {
+                    document.querySelectorAll('.evidence-btn').forEach(button => {
+                        button.addEventListener('click', function () {
+                            const punishmentId = this.dataset.id;
+                            showEvidenceModal(punishmentId);
+                        });
+                    });
+
+                    // Attach event listeners for hide buttons
+                    document.querySelectorAll('.hide-btn').forEach(button => {
+                        button.addEventListener('click', async function () {
+                            const punishmentId = this.dataset.id;
+                            const isHidden = this.dataset.hidden === 'true';
+                            togglePunishmentVisibility(punishmentId, !isHidden);
+                        });
+                    });
+                }
+            }
+        }
+        safeFeatherReplace();
     }
-    safeFeatherReplace();
-  }
 
-  // NEW: Toggle punishment visibility (hide/unhide)
-  async function togglePunishmentVisibility(punishmentId, hidden) {
-    try {
-      const response = await fetch(`/api/punishments/${punishmentId}/hide`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ hidden: hidden })
-      });
+    // NEW: Toggle punishment visibility (hide/unhide)
+    async function togglePunishmentVisibility(punishmentId, hidden) {
+        try {
+            const response = await fetch(`/api/punishments/${punishmentId}/hide`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    hidden: hidden
+                })
+            });
 
-      const data = await response.json();
-      if (response.ok && data.success) {
-        showMessage(data.message, 'success');
-        // Refresh current page
-        const hash = window.location.hash || '#/';
-        const page = hash.substring(2) || 'home';
-        loadPageContent(page);
-      } else {
-        showMessage(data.error || 'Failed to update punishment visibility', 'error');
-      }
-    } catch (error) {
-      showMessage('Failed to update punishment visibility: ' + error.message, 'error');
+            const data = await response.json();
+            if (response.ok && data.success) {
+                showMessage(data.message, 'success');
+                // Refresh current page
+                const hash = window.location.hash || '#/';
+                const page = hash.substring(2) || 'home';
+                loadPageContent(page);
+            } else {
+                showMessage(data.error || 'Failed to update punishment visibility', 'error');
+            }
+        } catch (error) {
+            showMessage('Failed to update punishment visibility: ' + error.message, 'error');
+        }
     }
-    safeFeatherReplace();
-  }
 
-  // --- Evidence Modal ---
-  function showEvidenceModal(punishmentId) {
-    // Create modal HTML
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.id = 'evidence-modal';
-    modal.innerHTML = `
+    // --- Evidence Modal ---
+    function showEvidenceModal(punishmentId) {
+        // Create modal HTML
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'evidence-modal';
+        modal.innerHTML = `
       <div class="modal-content">
         <div class="modal-header">
-          <h3><i class="fas fa-link"></i> Add Evidence Link</h3>
-          <span class="modal-close">&times;</span>
+          <h3 class="text-lg font-semibold text-gray-900 flex items-center"><i data-feather="link" class="mr-2"></i> Add Evidence Link</h3>
+          <span class="modal-close text-2xl font-bold cursor-pointer text-gray-500 hover:text-black">&times;</span>
         </div>
         <div class="modal-body">
           <form id="evidence-form">
             <div class="form-group">
-              <label for="evidence-link"><i class="fas fa-link"></i> Evidence Link (Google Drive, YouTube, etc.)</label>
+              <label for="evidence-link" class="block text-sm font-medium text-gray-700 mb-2 flex items-center"><i data-feather="link" class="mr-2 h-4 w-4"></i> Evidence Link (Google Drive, YouTube, etc.)</label>
               <input type="url" id="evidence-link" name="evidence_link" required
-                     placeholder="https://drive.google.com/... or https://youtube.com/...">
+                     placeholder="https://drive.google.com/... or https://youtube.com/..." class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
             </div>
-            <div class="form-actions">
+            <div class="form-actions flex gap-3 justify-end">
               <button type="button" class="btn btn-outline modal-close-btn">Cancel</button>
               <button type="submit" class="btn btn-primary">
-                <i class="fas fa-save"></i> Save Evidence
+                <i data-feather="save" class="mr-2 h-4 w-4"></i> Save Evidence
               </button>
             </div>
           </form>
@@ -879,92 +993,159 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `;
 
-    document.body.appendChild(modal);
+        document.body.appendChild(modal);
+        safeFeatherReplace();
 
-    // Attach event listeners
-    const closeModal = () => {
-      document.body.removeChild(modal);
-    };
+        // Attach event listeners
+        const closeModal = () => {
+            document.body.removeChild(modal);
+        };
 
-    modal.querySelector('.modal-close').addEventListener('click', closeModal);
-    modal.querySelector('.modal-close-btn').addEventListener('click', closeModal);
+        modal.querySelector('.modal-close').addEventListener('click', closeModal);
+        modal.querySelector('.modal-close-btn').addEventListener('click', closeModal);
 
-    modal.querySelector('#evidence-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const evidenceLink = document.getElementById('evidence-link').value;
+        modal.querySelector('#evidence-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const evidenceLink = document.getElementById('evidence-link').value;
 
-      try {
-        const response = await fetch(`/api/punishments/${punishmentId}/evidence`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ evidence_link: evidenceLink })
+            try {
+                const response = await fetch(`/api/punishments/${punishmentId}/evidence`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        evidence_link: evidenceLink
+                    })
+                });
+
+                if (response.ok) {
+                    showMessage('Evidence link saved successfully', 'success');
+                    closeModal();
+                    // Refresh current page
+                    const hash = window.location.hash || '#/';
+                    const page = hash.substring(2) || 'home';
+                    loadPageContent(page);
+                } else {
+                    const data = await response.json();
+                    showMessage(data.error || 'Failed to save evidence link', 'error');
+                }
+            } catch (error) {
+                showMessage('Failed to save evidence link: ' + error.message, 'error');
+            }
         });
 
-        if (response.ok) {
-          showMessage('Evidence link saved successfully', 'success');
-          closeModal();
-          // Refresh current page
-          const hash = window.location.hash || '#/';
-          const page = hash.substring(2) || 'home';
-          loadPageContent(page);
-        } else {
-          const data = await response.json();
-          showMessage(data.error || 'Failed to save evidence link', 'error');
-        }
-      } catch (error) {
-        showMessage('Failed to save evidence link: ' + error.message, 'error');
-      }
-      safeFeatherReplace();
-    });
-
-    // Close modal when clicking outside
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        closeModal();
-      }
-    });
-
-    safeFeatherReplace();
-  }
-
-  // --- Utility Functions ---
-  function escapeHtml(unsafe = "") {
-    if (unsafe === null || unsafe === undefined) {
-      return "";
+        // Close modal when clicking outside
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
     }
-    return String(unsafe)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
 
-  function showMessage(message, type) {
-    // Create notification element
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.innerHTML = `
-      <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
+    // --- Utility Functions ---
+    function escapeHtml(unsafe = "") {
+        if (unsafe === null || unsafe === undefined) {
+            return "";
+        }
+        return String(unsafe)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function showMessage(message, type) {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.innerHTML = `
+      <i data-feather="${type === 'success' ? 'check-circle' : 'exclamation-circle'}" class="w-5 h-5"></i>
       ${escapeHtml(message)}
     `;
 
-    // Add to body
-    document.body.appendChild(notification);
+        // Add to body
+        document.body.appendChild(notification);
+        safeFeatherReplace();
 
-    // Remove after delay
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    }, 5000);
+        // Remove after delay
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 5000);
+    }
 
-    safeFeatherReplace();
-  }
+    function updateRecentActionsTable(actions) {
+        const tbody = document.getElementById('recent-actions-tbody');
+        const noActionsRow = document.getElementById('no-recent-actions-row'); // Get the "No recent actions" row
 
-  // --- Event Listeners ---
-  window.addEventListener('hashchange', navigate);
-  navigate(); // initial load
+        if (actions && actions.length > 0) {
+            // Remove the "No recent actions" row if it exists
+            if (noActionsRow) {
+                tbody.removeChild(noActionsRow);
+            }
+
+            // Populate the table with action rows
+            tbody.innerHTML = actions.map(action => `
+                        <tr class="hover:bg-gray-750 transition-colors">
+                            <td class="py-4 px-6">
+                                <div class="flex items-center">
+
+                                    <span>${escapeHtml(action.user)}</span>
+                                </div>
+                            </td>
+                            <td class="py-4 px-6">${escapeHtml(action.action)}</td>
+                            <td class="py-4 px-6">${escapeHtml(action.reason)}</td>
+                            <td class="py-4 px-6">${escapeHtml(action.date)}</td>
+                            <td class="py-4 px-6">${escapeHtml(action.moderator)}</td>
+                        </tr>
+                    `).join('');
+        } else {
+            // If no recent actions, add the "No recent actions" row if it doesn't exist
+            if (!noActionsRow) {
+                tbody.innerHTML = `
+                            <tr id="no-recent-actions-row">
+                                <td colspan="5" class="py-4 px-6 text-center">
+                                    No recent actions recorded.
+                                </td>
+                            </tr>`;
+                safeFeatherReplace();
+            }
+        }
+    }
+
+    async function fetchRecentActions() {
+        try {
+            const response = await fetch('/api/recent-actions'); // Replace '/api/recent-actions' with your actual API endpoint
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            if (data && data.recentActions) {
+                updateRecentActionsTable(data.recentActions);
+            } else {
+                updateRecentActionsTable([]);
+            }
+        } catch (error) {
+            console.error('Error fetching recent actions:', error);
+            updateRecentActionsTable([]); // Show "No recent actions" message in case of an error
+        }
+        safeFeatherReplace();
+    }
+
+    // --- Event Listeners ---
+    window.addEventListener('hashchange', navigate);
+
+    // NEW: Initialize everything on page load
+    navigate(); // initial load
+    fetchRecentActions(); // Load recent actions
+    updateCommunityStats(); // NEW: Load community stats initially
+
+    // NEW: Set up periodic updates for community stats (every 5 minutes)
+    setInterval(() => {
+        updateCommunityStats();
+        fetchRecentActions(); // Also refresh recent actions periodically
+    }, 300000); // 5 minutes = 300,000 milliseconds
 });
