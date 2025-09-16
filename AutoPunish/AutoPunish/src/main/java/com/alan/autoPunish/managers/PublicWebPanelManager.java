@@ -38,7 +38,9 @@ public class PublicWebPanelManager {
 
             app = Javalin.create(config -> {
                 // ✅ FIXED: CORS configuration for Javalin 6.x
-                config.registerPlugin(new io.javalin.plugin.bundled.CorsPlugin(cors -> cors.addRule(CorsPluginConfig.CorsRule::anyHost)));
+                config.registerPlugin(new io.javalin.plugin.bundled.CorsPlugin(cors -> {
+                    cors.addRule(it -> it.anyHost());
+                }));
 
                 // ✅ FIXED: Static files configuration
                 config.staticFiles.add(staticFiles -> {
