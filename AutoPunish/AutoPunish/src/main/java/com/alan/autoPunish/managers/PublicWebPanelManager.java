@@ -5,7 +5,6 @@ import com.alan.autoPunish.models.Punishment;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import io.javalin.http.staticfiles.Location;
-import io.javalin.plugin.bundled.CorsPluginConfig;
 
 import java.sql.*;
 import java.util.*;
