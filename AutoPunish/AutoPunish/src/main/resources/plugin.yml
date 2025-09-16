@@ -1,4 +1,81 @@
 name: AutoPunish
-version: '3.0.0'
-main: com.alan.autoPunish.AutoPunish
-api-version: '1.21'
+version: 4.0.0
+main: com.alan.autoPunish.AutoPunishPlugin
+api-version: 1.21
+author: AlanTheDev
+description: Advanced automated punishment system for Paper servers
+website: https://github.com/AlanTheDev/AutoPunish
+
+# Soft dependencies (optional but recommended)
+softdepend: [Vault, LuckPerms]
+
+# Commands
+commands:
+  autopunish:
+    description: Main AutoPunish command
+    usage: /<command> [reload|version]
+    permission: autopunish.admin
+    aliases: [ap]
+
+  punish:
+    description: Apply a punishment to a player
+    usage: /<command> <player> <type> [duration] [reason]
+    permission: autopunish.punish
+
+  punishadmin:
+    description: Advanced punishment administration
+    usage: /<command> [queue|history|stats]
+    permission: autopunish.admin
+
+  punishments:
+    description: View recent punishments
+    usage: /<command> [player] [page]
+    permission: autopunish.history
+
+  resethistory:
+    description: Reset a player's punishment history
+    usage: /<command> <player> [rule]
+    permission: autopunish.admin
+
+  rules:
+    description: Manage punishment rules
+    usage: /<command> [list|reload|edit]
+    permission: autopunish.rules
+
+# Permissions
+permissions:
+  autopunish.*:
+    description: All AutoPunish permissions
+    children:
+      - autopunish.punish
+      - autopunish.admin
+      - autopunish.history
+      - autopunish.rules
+      - autopunish.bypass
+    default: op
+
+  autopunish.punish:
+    description: Allows using /punish command
+    default: op
+
+  autopunish.admin:
+    description: Access to admin commands and queue management
+    default: op
+
+  autopunish.history:
+    description: View punishment history
+    default: op
+
+  autopunish.rules:
+    description: Manage punishment rules
+    default: op
+
+  autopunish.bypass:
+    description: Bypass AutoPunish punishments
+    default: op
+
+# Events (for other plugins)
+events:
+  playerPunished: com.alan.autoPunish.api.events.PlayerPunishedEvent
+  punishmentApproved: com.alan.autoPunish.api.events.PunishmentApprovedEvent
+  punishmentDenied: com.alan.autoPunish.api.events.PunishmentDeniedEvent
