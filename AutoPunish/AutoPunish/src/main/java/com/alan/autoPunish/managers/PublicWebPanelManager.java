@@ -63,11 +63,11 @@ public class PublicWebPanelManager {
     private void setupRoutes() {
         app.get("/", ctx -> ctx.redirect("/index.html"));
 
-        // Public endpoints (exclude hidden punishments)
-        app.get("/api/punishments", ctx -> getPunishments(ctx, null, false));
-        app.get("/api/punishments/warns", ctx -> getPunishments(ctx, "warn", false));
-        app.get("/api/punishments/mutes", ctx -> getPunishments(ctx, "mute", false));
-        app.get("/api/punishments/bans", ctx -> getPunishments(ctx, "ban", false));
+        // Public endpoints
+        app.get("/api/punishments", ctx -> getPunishments(ctx, null));
+        app.get("/api/punishments/warns", ctx -> getPunishments(ctx, "warn"));
+        app.get("/api/punishments/mutes", ctx -> getPunishments(ctx, "mute"));
+        app.get("/api/punishments/bans", ctx -> getPunishments(ctx, "ban"));
         app.get("/api/punishments/stats", this::getPunishmentStats);
 
         // NEW: Get specific punishment (with evidence link)
@@ -94,17 +94,10 @@ public class PublicWebPanelManager {
         app.get("/api/staff/users", this::getAllStaffUsers);
         app.delete("/api/staff/users/{username}", this::deleteStaffUser);
 
-        // NEW: Staff-only endpoints (include hidden punishments)
-        app.get("/api/staff/punishments", ctx -> getPunishments(ctx, null, true));
-        app.get("/api/staff/punishments/warns", ctx -> getPunishments(ctx, "warn", true));
-        app.get("/api/staff/punishments/mutes", ctx -> getPunishments(ctx, "mute", true));
-        app.get("/api/staff/punishments/bans", ctx -> getPunishments(ctx, "ban", true));
-
         app.error(404, ctx -> ctx.json(Map.of("error", "Not found")));
     }
 
-    // UPDATED: Include/exclude hidden punishments based on staff status
-    private void getPunishments(Context ctx, String type, boolean includeHidden) {
+    private void getPunishments(Context ctx, String type) {
         try {
             int page = ctx.queryParamAsClass("page", Integer.class).getOrDefault(1);
             int size = ctx.queryParamAsClass("size", Integer.class).getOrDefault(20);
@@ -116,9 +109,9 @@ public class PublicWebPanelManager {
             List<Map<String, Object>> punishments = new ArrayList<>();
             int total = 0;
 
-            // Build SQL dynamically
-            StringBuilder sql = new StringBuilder("SELECT * FROM punishments");
-            StringBuilder countSql = new StringBuilder("SELECT COUNT(*) AS total FROM punishments");
+            // Build SQL dynamically - EXCLUDE HIDDEN PUNISHMENTS
+            StringBuilder sql = new StringBuilder("SELECT * FROM punishments WHERE hidden = FALSE");
+            StringBuilder countSql = new StringBuilder("SELECT COUNT(*) AS total FROM punishments WHERE hidden = FALSE");
             List<Object> params = new ArrayList<>();
             List<Object> countParams = new ArrayList<>();
 
@@ -139,16 +132,10 @@ public class PublicWebPanelManager {
                 countParams.add("%" + ruleFilter + "%");
             }
 
-            // NEW: Filter hidden punishments for public view
-            if (!includeHidden) {
-                conditions.add("hidden = FALSE");
-                countParams.add(false);
-            }
-
             if (!conditions.isEmpty()) {
                 String where = String.join(" AND ", conditions);
-                sql.append(" WHERE ").append(where);
-                countSql.append(" WHERE ").append(where);
+                sql.append(" AND ").append(where);
+                countSql.append(" AND ").append(where);
             }
 
             // Sorting

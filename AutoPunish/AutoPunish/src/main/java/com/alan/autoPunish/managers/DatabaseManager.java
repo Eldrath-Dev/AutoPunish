@@ -77,7 +77,7 @@ public class DatabaseManager {
         try (Statement statement = connection.createStatement()) {
             logger.info("Ensuring database tables exist...");
 
-            // Create punishments table (may need migration)
+            // Create punishments table with proper column sizes
             statement.execute(
                     "CREATE TABLE IF NOT EXISTS punishments (" +
                             "id VARCHAR(36) PRIMARY KEY, " +
@@ -195,8 +195,80 @@ public class DatabaseManager {
                     logger.info("hidden column already exists or migration completed");
                 }
             }
+
+            // Check and fix column sizes if needed
+            fixColumnSizes(statement);
         } catch (Exception e) {
             logger.log(Level.WARNING, "Database migration check failed: " + e.getMessage());
+        }
+    }
+
+    // NEW: Fix column sizes for existing databases
+    private void fixColumnSizes(Statement statement) throws SQLException {
+        logger.info("Checking column sizes for migration...");
+
+        // Check staff_name column size
+        try {
+            DatabaseMetaData metaData = connection.getMetaData();
+            ResultSet rs = metaData.getColumns(null, null, "PUNISHMENTS", "STAFF_NAME");
+            if (rs.next()) {
+                int size = rs.getInt("COLUMN_SIZE");
+                if (size < 100) {
+                    logger.info("Migrating punishments table: increasing staff_name column size from " + size + " to 100");
+                    statement.execute("ALTER TABLE punishments ALTER COLUMN staff_name VARCHAR(100)");
+                }
+            }
+            rs.close();
+        } catch (SQLException e) {
+            logger.log(Level.WARNING, "Could not check staff_name column size: " + e.getMessage());
+        }
+
+        // Check player_name column size
+        try {
+            DatabaseMetaData metaData = connection.getMetaData();
+            ResultSet rs = metaData.getColumns(null, null, "PUNISHMENTS", "PLAYER_NAME");
+            if (rs.next()) {
+                int size = rs.getInt("COLUMN_SIZE");
+                if (size < 100) {
+                    logger.info("Migrating punishments table: increasing player_name column size from " + size + " to 100");
+                    statement.execute("ALTER TABLE punishments ALTER COLUMN player_name VARCHAR(100)");
+                }
+            }
+            rs.close();
+        } catch (SQLException e) {
+            logger.log(Level.WARNING, "Could not check player_name column size: " + e.getMessage());
+        }
+
+        // Check staff_name column size in queued_punishments
+        try {
+            DatabaseMetaData metaData = connection.getMetaData();
+            ResultSet rs = metaData.getColumns(null, null, "QUEUED_PUNISHMENTS", "STAFF_NAME");
+            if (rs.next()) {
+                int size = rs.getInt("COLUMN_SIZE");
+                if (size < 100) {
+                    logger.info("Migrating queued_punishments table: increasing staff_name column size from " + size + " to 100");
+                    statement.execute("ALTER TABLE queued_punishments ALTER COLUMN staff_name VARCHAR(100)");
+                }
+            }
+            rs.close();
+        } catch (SQLException e) {
+            logger.log(Level.WARNING, "Could not check queued_punishments staff_name column size: " + e.getMessage());
+        }
+
+        // Check player_name column size in queued_punishments
+        try {
+            DatabaseMetaData metaData = connection.getMetaData();
+            ResultSet rs = metaData.getColumns(null, null, "QUEUED_PUNISHMENTS", "PLAYER_NAME");
+            if (rs.next()) {
+                int size = rs.getInt("COLUMN_SIZE");
+                if (size < 100) {
+                    logger.info("Migrating queued_punishments table: increasing player_name column size from " + size + " to 100");
+                    statement.execute("ALTER TABLE queued_punishments ALTER COLUMN player_name VARCHAR(100)");
+                }
+            }
+            rs.close();
+        } catch (SQLException e) {
+            logger.log(Level.WARNING, "Could not check queued_punishments player_name column size: " + e.getMessage());
         }
     }
 
